@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { captureNote, resolveNote } from '../src/entry-content';
 
-test('captures a live full-note source and resolves its current body', () => {
+void test('captures a live full-note source and resolves its current body', () => {
 	const entry = captureNote({ id: 'research', path: 'Notes/Research.md' });
 	const markdown = '---\ntopic: tests\n---\n# Current body\n\n- [ ] Keep selectable';
 
@@ -23,7 +23,7 @@ test('captures a live full-note source and resolves its current body', () => {
 	);
 });
 
-test('keeps the complete source when metadata has no frontmatter position', () => {
+void test('keeps the complete source when metadata has no frontmatter position', () => {
 	const entry = captureNote({ id: 'plain', path: 'Plain.md' });
 
 	assert.equal(

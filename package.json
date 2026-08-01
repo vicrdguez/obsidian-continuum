@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-continuum",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Collect live notes into one persistent reading flow.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

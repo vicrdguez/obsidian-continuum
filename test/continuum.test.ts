@@ -14,7 +14,7 @@ const beta: LiveNoteEntry = {
 	sourcePath: 'Notes/Beta.md',
 };
 
-test('adds live notes in order and focuses the newest entry', () => {
+void test('adds live notes in order and focuses the newest entry', () => {
 	const continuum = createContinuum();
 
 	continuum.dispatch({ type: 'add-entry', entry: alpha });
@@ -26,7 +26,7 @@ test('adds live notes in order and focuses the newest entry', () => {
 	});
 });
 
-test('focuses an existing live note instead of duplicating it', () => {
+void test('focuses an existing live note instead of duplicating it', () => {
 	const continuum = createContinuum({ entries: [alpha, beta], focusedId: 'beta' });
 
 	continuum.dispatch({
@@ -40,7 +40,7 @@ test('focuses an existing live note instead of duplicating it', () => {
 	});
 });
 
-test('restores valid ordered entries and focus from saved data', () => {
+void test('restores valid ordered entries and focus from saved data', () => {
 	const continuum = createContinuum({ entries: [beta, alpha], focusedId: 'beta' });
 
 	assert.deepEqual(continuum.snapshot(), {

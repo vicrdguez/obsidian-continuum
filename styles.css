@@ -1,8 +1,31 @@
-/*
+.continuum {
+	user-select: text;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.continuum-empty {
+	color: var(--text-muted);
+	padding: var(--size-4-4);
+}
 
-If your plugin does not need CSS, delete this file.
+.continuum-entry {
+	border-block-end: 1px solid var(--background-modifier-border);
+	padding: var(--size-4-4);
+}
 
-*/
+.continuum-entry.is-focused,
+.continuum-entry:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+}
+
+.continuum-source {
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: 0;
+}
+
+.continuum-entry-body {
+	margin-block-start: var(--size-4-2);
+}

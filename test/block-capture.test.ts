@@ -107,6 +107,62 @@ void test('selection takes precedence and preserves arbitrary Markdown exactly',
 	assert.equal(plan.sourceEdit, undefined);
 });
 
+void test('headings and existing block IDs are live without source edits', () => {
+	const headingMarkdown = '# Findings\nEvidence';
+	const headingRange = range(headingMarkdown, 0, headingMarkdown.length);
+	const heading = capture({
+		markdown: headingMarkdown,
+		cursor: headingRange.start,
+		selection: null,
+		metadata: {
+			path: 'Research.md',
+			sections: [{ type: 'heading', position: range(headingMarkdown, 0, 10) }],
+			headings: [{ heading: 'Findings', level: 1, position: range(headingMarkdown, 0, 10) }],
+		},
+		automaticBlockIds: false,
+		generateId: () => 'unused',
+		entryId: 'heading',
+	});
+	assert.equal(heading.entry.type, 'live-content');
+	assert.equal(heading.entry.sourceAddress, 'Research.md#Findings');
+	assert.equal(heading.sourceEdit, undefined);
+
+	const blockMarkdown = 'Stable paragraph ^stable1';
+	const block = capture({
+		markdown: blockMarkdown,
+		cursor: range(blockMarkdown, 2, 2).start,
+		selection: null,
+		metadata: {
+			path: 'Research.md',
+			sections: [{ type: 'paragraph', id: 'stable1', position: range(blockMarkdown, 0, blockMarkdown.length) }],
+		},
+		automaticBlockIds: false,
+		generateId: () => 'unused',
+		entryId: 'block',
+	});
+	assert.equal(block.entry.type, 'live-content');
+	assert.equal(block.entry.sourceAddress, 'Research.md#^stable1');
+	assert.equal(block.sourceEdit, undefined);
+});
+
+void test('an unaddressed cursor Block stays a snapshot by default', () => {
+	const markdown = 'Unaddressed paragraph';
+	const blockRange = range(markdown, 0, markdown.length);
+	const plan = capture({
+		markdown,
+		cursor: blockRange.start,
+		selection: null,
+		metadata: { path: 'Source.md', sections: [{ type: 'paragraph', position: blockRange }] },
+		automaticBlockIds: false,
+		generateId: () => 'unused',
+		entryId: 'snapshot',
+	});
+
+	assert.equal(plan.entry.type, 'snapshot');
+	assert.equal(plan.entry.markdown, markdown);
+	assert.equal(plan.sourceEdit, undefined);
+});
+
 void test('captures a nested list item and descendants without siblings', () => {
 	const markdown = '- Parent\n  - Child\n    continuation\n  - Sibling\n- Other';
 	const item = (text: string, endText: string, parent: number) => {

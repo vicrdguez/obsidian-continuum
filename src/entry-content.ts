@@ -48,10 +48,20 @@ export interface CaptureInput {
 	readonly entryId: string;
 }
 
-export interface CapturedEntry {
+export type CapturedEntry = SnapshotEntry | LiveContentEntry;
+
+export interface SnapshotEntry {
 	readonly id: string;
 	readonly type: 'snapshot';
 	readonly sourcePath: string;
+	readonly markdown: string;
+}
+
+export interface LiveContentEntry {
+	readonly id: string;
+	readonly type: 'live-content';
+	readonly sourcePath: string;
+	readonly sourceAddress: string;
 	readonly markdown: string;
 }
 
@@ -88,9 +98,20 @@ export function capture(input: CaptureInput): CapturePlan {
 		return snapshot(input, selection.start, selection.end);
 	}
 	const cursorOffset = positionToOffset(input.markdown, input.cursor);
-	const block = blockAt(input.metadata, cursorOffset);
+	const block = blockAt(input.metadata, cursorOffset, input.markdown);
 	if (!block) throw new Error('No Markdown Block at the cursor');
-	return snapshot(input, block.start.offset, block.end.offset);
+	if (block.subpath) {
+		return {
+			entry: {
+				id: input.entryId,
+				type: 'live-content',
+				sourcePath: input.metadata.path,
+				sourceAddress: `${input.metadata.path}${block.subpath}`,
+				markdown: input.markdown.slice(block.range.start.offset, block.range.end.offset),
+			},
+		};
+	}
+	return snapshot(input, block.range.start.offset, block.range.end.offset);
 }
 
 function snapshot(input: CaptureInput, start: number, end: number): CapturePlan {
@@ -110,7 +131,12 @@ function editorRangeToOffsets(markdown: string, range: EditorRange): { start: nu
 	return { start: Math.min(from, to), end: Math.max(from, to) };
 }
 
-function blockAt(metadata: SourceMetadata, offset: number): SourceRange | undefined {
+interface DerivedBlock {
+	readonly range: SourceRange;
+	readonly subpath?: string;
+}
+
+function blockAt(metadata: SourceMetadata, offset: number, markdown: string): DerivedBlock | undefined {
 	const headingIndex = metadata.headings?.findLastIndex(
 		({ position }) => position.start.offset <= offset,
 	) ?? -1;
@@ -119,28 +145,38 @@ function blockAt(metadata: SourceMetadata, offset: number): SourceRange | undefi
 		if (heading) {
 			const next = metadata.headings.slice(headingIndex + 1)
 				.find(({ level }) => level <= heading.level);
-			const end = next?.position.start ?? documentEnd(metadata);
-			if (offset < end.offset) return { start: heading.position.start, end };
+			const end = next?.position.start ?? offsetPosition(markdown, markdown.length);
+			if (offset < end.offset) {
+				return {
+					range: { start: heading.position.start, end },
+					subpath: `#${heading.heading}`,
+				};
+			}
 		}
 	}
 
 	const listItem = metadata.listItems
 		?.filter(({ position }) => contains(position, offset))
 		.sort((left, right) => right.position.start.offset - left.position.start.offset)[0];
-	if (listItem) return listItem.position;
+	if (listItem) {
+		return {
+			range: listItem.position,
+			...(listItem.id ? { subpath: `#^${listItem.id}` } : {}),
+		};
+	}
 
-	return metadata.sections?.find(({ position }) => contains(position, offset))?.position;
+	const section = metadata.sections?.find(({ position }) => contains(position, offset));
+	if (!section) return undefined;
+	return {
+		range: section.position,
+		...(section.id ? { subpath: `#^${section.id}` } : {}),
+	};
 }
 
-function documentEnd(metadata: SourceMetadata): SourcePosition {
-	const positions = [
-		...(metadata.sections ?? []).map(({ position }) => position.end),
-		...(metadata.listItems ?? []).map(({ position }) => position.end),
-		...(metadata.headings ?? []).map(({ position }) => position.end),
-	];
-	return positions.reduce((latest, position) =>
-		position.offset > latest.offset ? position : latest,
-	positions[0] ?? { line: 0, ch: 0, offset: 0 });
+function offsetPosition(markdown: string, offset: number): SourcePosition {
+	const before = markdown.slice(0, offset);
+	const lines = before.split('\n');
+	return { line: lines.length - 1, ch: lines.at(-1)?.length ?? 0, offset };
 }
 
 function contains(range: SourceRange, offset: number): boolean {

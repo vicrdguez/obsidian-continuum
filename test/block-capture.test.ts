@@ -163,6 +163,72 @@ void test('an unaddressed cursor Block stays a snapshot by default', () => {
 	assert.equal(plan.sourceEdit, undefined);
 });
 
+void test('opted-in cursor and exact Block selections receive collision-checked IDs', () => {
+	const markdown = 'Paragraph\n\nAlready addressed ^abc123';
+	const paragraph = range(markdown, 0, 'Paragraph'.length);
+	const addressedStart = markdown.indexOf('Already');
+	const metadata: SourceMetadata = {
+		path: 'Source.md',
+		sections: [
+			{ type: 'paragraph', position: paragraph },
+			{ type: 'paragraph', id: 'abc123', position: range(markdown, addressedStart, markdown.length) },
+		],
+	};
+
+	for (const selection of [null, { from: paragraph.start, to: paragraph.end }]) {
+		const candidates = ['abc123', 'def456'];
+		const plan = capture({
+			markdown,
+			cursor: paragraph.start,
+			selection,
+			metadata,
+			automaticBlockIds: true,
+			generateId: () => candidates.shift() ?? 'unused',
+			entryId: 'live',
+		});
+
+		assert.equal(plan.entry.type, 'live-content');
+		assert.equal(plan.entry.sourceAddress, 'Source.md#^def456');
+		assert.deepEqual(plan.sourceEdit, {
+			range: { from: { line: 0, ch: 0 }, to: { line: 0, ch: 9 } },
+			replacement: 'Paragraph ^def456',
+		});
+	}
+});
+
+void test('inexact selections stay exact snapshots and never edit their source', () => {
+	const markdown = 'First block\n\nSecond block';
+	const first = range(markdown, 0, 'First block'.length);
+	const secondStart = markdown.indexOf('Second');
+	const metadata: SourceMetadata = {
+		path: 'Source.md',
+		sections: [
+			{ type: 'paragraph', position: first },
+			{ type: 'paragraph', position: range(markdown, secondStart, markdown.length) },
+		],
+	};
+	const selections = [
+		range(markdown, 1, 5),
+		range(markdown, 0, first.end.offset - 1),
+		range(markdown, 0, markdown.length),
+	];
+
+	for (const selected of selections) {
+		const plan = capture({
+			markdown,
+			cursor: first.start,
+			selection: { from: selected.start, to: selected.end },
+			metadata,
+			automaticBlockIds: true,
+			generateId: () => 'new123',
+			entryId: 'snapshot',
+		});
+		assert.equal(plan.entry.type, 'snapshot');
+		assert.equal(plan.entry.markdown, markdown.slice(selected.start.offset, selected.end.offset));
+		assert.equal(plan.sourceEdit, undefined);
+	}
+});
+
 void test('captures a nested list item and descendants without siblings', () => {
 	const markdown = '- Parent\n  - Child\n    continuation\n  - Sibling\n- Other';
 	const item = (text: string, endText: string, parent: number) => {

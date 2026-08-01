@@ -95,23 +95,63 @@ export function captureNote(source: NoteSource): LiveNoteEntry {
 export function capture(input: CaptureInput): CapturePlan {
 	const selection = input.selection && editorRangeToOffsets(input.markdown, input.selection);
 	if (selection && selection.start !== selection.end) {
+		const selectedBlock = blockAt(input.metadata, selection.start, input.markdown);
+		if (
+			selectedBlock &&
+			selectedBlock.range.start.offset === selection.start &&
+			selectedBlock.range.end.offset === selection.end
+		) return captureBlock(input, selectedBlock);
 		return snapshot(input, selection.start, selection.end);
 	}
 	const cursorOffset = positionToOffset(input.markdown, input.cursor);
 	const block = blockAt(input.metadata, cursorOffset, input.markdown);
 	if (!block) throw new Error('No Markdown Block at the cursor');
-	if (block.subpath) {
-		return {
-			entry: {
-				id: input.entryId,
-				type: 'live-content',
-				sourcePath: input.metadata.path,
-				sourceAddress: `${input.metadata.path}${block.subpath}`,
-				markdown: input.markdown.slice(block.range.start.offset, block.range.end.offset),
+	return captureBlock(input, block);
+}
+
+function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
+	const markdown = input.markdown.slice(block.range.start.offset, block.range.end.offset);
+	let subpath = block.subpath;
+	let sourceEdit: CapturePlan['sourceEdit'];
+	if (!subpath && input.automaticBlockIds) {
+		const id = uniqueBlockId(input);
+		subpath = `#^${id}`;
+		sourceEdit = {
+			range: {
+				from: editorPosition(block.range.start),
+				to: editorPosition(block.range.end),
 			},
+			replacement: block.type === 'paragraph'
+				? `${markdown} ^${id}`
+				: `${markdown}\n^${id}`,
 		};
 	}
-	return snapshot(input, block.range.start.offset, block.range.end.offset);
+	if (!subpath) return snapshot(input, block.range.start.offset, block.range.end.offset);
+	return {
+		entry: {
+			id: input.entryId,
+			type: 'live-content',
+			sourcePath: input.metadata.path,
+			sourceAddress: `${input.metadata.path}${subpath}`,
+			markdown,
+		},
+		...(sourceEdit ? { sourceEdit } : {}),
+	};
+}
+
+function uniqueBlockId(input: CaptureInput): string {
+	const existing = new Set([
+		...(input.metadata.sections ?? []).flatMap(({ id }) => id ? [id] : []),
+		...(input.metadata.listItems ?? []).flatMap(({ id }) => id ? [id] : []),
+	]);
+	let candidate: string;
+	do candidate = input.generateId();
+	while (!/^[a-z0-9]{6}$/.test(candidate) || existing.has(candidate));
+	return candidate;
+}
+
+function editorPosition(position: SourcePosition): EditorPosition {
+	return { line: position.line, ch: position.ch };
 }
 
 function snapshot(input: CaptureInput, start: number, end: number): CapturePlan {
@@ -133,13 +173,17 @@ function editorRangeToOffsets(markdown: string, range: EditorRange): { start: nu
 
 interface DerivedBlock {
 	readonly range: SourceRange;
+	readonly type: string;
 	readonly subpath?: string;
 }
 
 function blockAt(metadata: SourceMetadata, offset: number, markdown: string): DerivedBlock | undefined {
-	const headingIndex = metadata.headings?.findLastIndex(
-		({ position }) => position.start.offset <= offset,
-	) ?? -1;
+	let headingIndex = -1;
+	for (let index = 0; index < (metadata.headings?.length ?? 0); index += 1) {
+		if ((metadata.headings?.[index]?.position.start.offset ?? Infinity) <= offset) {
+			headingIndex = index;
+		}
+	}
 	if (headingIndex >= 0 && metadata.headings) {
 		const heading = metadata.headings[headingIndex];
 		if (heading) {
@@ -149,6 +193,7 @@ function blockAt(metadata: SourceMetadata, offset: number, markdown: string): De
 			if (offset < end.offset) {
 				return {
 					range: { start: heading.position.start, end },
+					type: 'heading',
 					subpath: `#${heading.heading}`,
 				};
 			}
@@ -161,6 +206,7 @@ function blockAt(metadata: SourceMetadata, offset: number, markdown: string): De
 	if (listItem) {
 		return {
 			range: listItem.position,
+			type: 'list',
 			...(listItem.id ? { subpath: `#^${listItem.id}` } : {}),
 		};
 	}
@@ -169,6 +215,7 @@ function blockAt(metadata: SourceMetadata, offset: number, markdown: string): De
 	if (!section) return undefined;
 	return {
 		range: section.position,
+		type: section.type,
 		...(section.id ? { subpath: `#^${section.id}` } : {}),
 	};
 }

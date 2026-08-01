@@ -82,6 +82,31 @@ void test('captures a heading section through the next equal-or-higher heading',
 	);
 });
 
+void test('selection takes precedence and preserves arbitrary Markdown exactly', () => {
+	const markdown = 'First paragraph\n\nSecond paragraph';
+	const first = range(markdown, 0, 'First paragraph'.length);
+	const selected = range(markdown, 6, markdown.indexOf('Second') + 3);
+	const plan = capture({
+		markdown,
+		cursor: first.start,
+		selection: { from: selected.start, to: selected.end },
+		metadata: {
+			path: 'Source.md',
+			sections: [
+				{ type: 'paragraph', position: first },
+				{ type: 'paragraph', position: range(markdown, markdown.indexOf('Second'), markdown.length) },
+			],
+		},
+		automaticBlockIds: false,
+		generateId: () => 'unused',
+		entryId: 'selection',
+	});
+
+	assert.equal(plan.entry.type, 'snapshot');
+	assert.equal(plan.entry.markdown, 'paragraph\n\nSec');
+	assert.equal(plan.sourceEdit, undefined);
+});
+
 void test('captures a nested list item and descendants without siblings', () => {
 	const markdown = '- Parent\n  - Child\n    continuation\n  - Sibling\n- Other';
 	const item = (text: string, endText: string, parent: number) => {

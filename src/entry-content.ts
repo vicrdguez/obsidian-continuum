@@ -83,17 +83,31 @@ export function captureNote(source: NoteSource): LiveNoteEntry {
 }
 
 export function capture(input: CaptureInput): CapturePlan {
+	const selection = input.selection && editorRangeToOffsets(input.markdown, input.selection);
+	if (selection && selection.start !== selection.end) {
+		return snapshot(input, selection.start, selection.end);
+	}
 	const cursorOffset = positionToOffset(input.markdown, input.cursor);
 	const block = blockAt(input.metadata, cursorOffset);
 	if (!block) throw new Error('No Markdown Block at the cursor');
+	return snapshot(input, block.start.offset, block.end.offset);
+}
+
+function snapshot(input: CaptureInput, start: number, end: number): CapturePlan {
 	return {
 		entry: {
 			id: input.entryId,
 			type: 'snapshot',
 			sourcePath: input.metadata.path,
-			markdown: input.markdown.slice(block.start.offset, block.end.offset),
+			markdown: input.markdown.slice(start, end),
 		},
 	};
+}
+
+function editorRangeToOffsets(markdown: string, range: EditorRange): { start: number; end: number } {
+	const from = positionToOffset(markdown, range.from);
+	const to = positionToOffset(markdown, range.to);
+	return { start: Math.min(from, to), end: Math.max(from, to) };
 }
 
 function blockAt(metadata: SourceMetadata, offset: number): SourceRange | undefined {

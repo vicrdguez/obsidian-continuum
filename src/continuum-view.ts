@@ -1,17 +1,11 @@
 import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from 'obsidian';
-import type { Continuum } from './continuum';
+import type { ContinuumController } from './continuum-controller';
 import { resolveNote } from './entry-content';
 
 export const CONTINUUM_VIEW_TYPE = 'continuum';
 
-interface ContinuumHost {
-	readonly continuum: Continuum;
-	focusEntry(id: string): Promise<void>;
-	openSource(path: string): Promise<void>;
-}
-
 export class ContinuumView extends ItemView {
-	constructor(leaf: WorkspaceLeaf, private readonly plugin: ContinuumHost) {
+	constructor(leaf: WorkspaceLeaf, private readonly controller: ContinuumController) {
 		super(leaf);
 	}
 
@@ -33,11 +27,11 @@ export class ContinuumView extends ItemView {
 			if (!article) return;
 			this.contentEl.querySelector('.is-focused')?.removeClass('is-focused');
 			article.addClass('is-focused');
-			void this.plugin.focusEntry(article.dataset.entryId ?? '');
+			void this.controller.focusEntry(article.dataset.entryId ?? '');
 		});
 		this.registerDomEvent(this.contentEl, 'click', (event) => {
 			const source = (event.target as Element).closest<HTMLElement>('[data-source-path]');
-			if (source?.dataset.sourcePath) void this.plugin.openSource(source.dataset.sourcePath);
+			if (source?.dataset.sourcePath) void this.controller.openSource(source.dataset.sourcePath);
 		});
 		await this.render();
 	}
@@ -47,7 +41,7 @@ export class ContinuumView extends ItemView {
 		container.empty();
 		container.addClass('continuum');
 
-		const snapshot = this.plugin.continuum.snapshot();
+		const snapshot = this.controller.continuum.snapshot();
 		if (snapshot.entries.length === 0) {
 			container.createDiv({
 				cls: 'continuum-empty',

@@ -77,8 +77,24 @@ void test('captures a heading section through the next equal-or-higher heading',
 	const sections = headings.map(({ position }) => ({ type: 'heading', position }));
 
 	assert.equal(
-		captureAt(markdown, markdown.indexOf('Intro'), { sections, headings }),
+		captureAt(markdown, markdown.indexOf('# One'), { sections, headings }),
 		'# One\nIntro\n## Child\nDetails\n',
+	);
+});
+
+void test('captures the local Block rather than its preceding heading section', () => {
+	const markdown = '# Heading\n\nParagraph below';
+	const headingEnd = '# Heading'.length;
+	const paragraphStart = markdown.indexOf('Paragraph');
+	assert.equal(
+		captureAt(markdown, paragraphStart + 2, {
+			sections: [
+				{ type: 'heading', position: range(markdown, 0, headingEnd) },
+				{ type: 'paragraph', position: range(markdown, paragraphStart, markdown.length) },
+			],
+			headings: [{ heading: 'Heading', level: 1, position: range(markdown, 0, headingEnd) }],
+		}),
+		'Paragraph below',
 	);
 });
 
@@ -104,6 +120,10 @@ void test('selection takes precedence and preserves arbitrary Markdown exactly',
 
 	assert.equal(plan.entry.type, 'snapshot');
 	assert.equal(plan.entry.markdown, 'paragraph\n\nSec');
+	assert.deepEqual(plan.entry.sourceRange, {
+		from: { line: 0, ch: 6 },
+		to: { line: 2, ch: 3 },
+	});
 	assert.equal(plan.sourceEdit, undefined);
 });
 
@@ -134,7 +154,8 @@ void test('headings and existing block IDs are live without source edits', () =>
 		selection: null,
 		metadata: {
 			path: 'Research.md',
-			sections: [{ type: 'paragraph', id: 'stable1', position: range(blockMarkdown, 0, blockMarkdown.length) }],
+			sections: [{ type: 'paragraph', position: range(blockMarkdown, 0, blockMarkdown.length) }],
+			blocks: [{ id: 'stable1', position: range(blockMarkdown, 0, blockMarkdown.length) }],
 		},
 		automaticBlockIds: false,
 		generateId: () => 'unused',
@@ -171,8 +192,9 @@ void test('opted-in cursor and exact Block selections receive collision-checked 
 		path: 'Source.md',
 		sections: [
 			{ type: 'paragraph', position: paragraph },
-			{ type: 'paragraph', id: 'abc123', position: range(markdown, addressedStart, markdown.length) },
+			{ type: 'paragraph', position: range(markdown, addressedStart, markdown.length) },
 		],
+		blocks: [{ id: 'abc123', position: range(markdown, addressedStart, markdown.length) }],
 	};
 
 	for (const selection of [null, { from: paragraph.start, to: paragraph.end }]) {

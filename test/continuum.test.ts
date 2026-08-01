@@ -52,6 +52,7 @@ void test('deduplicates live source addresses but appends duplicate snapshots', 
 		id: 'snapshot',
 		type: 'snapshot',
 		sourcePath: 'Notes/Alpha.md',
+		sourceRange: { from: { line: 1, ch: 0 }, to: { line: 1, ch: 13 } },
 		markdown: 'Captured text',
 	};
 	const continuum = createContinuum({ entries: [live, snapshot], focusedId: 'snapshot' });

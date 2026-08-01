@@ -19,6 +19,10 @@ export interface SnapshotEntry {
 	readonly type: 'snapshot';
 	readonly sourcePath: string;
 	readonly sourceContext?: string;
+	readonly sourceRange: {
+		readonly from: { readonly line: number; readonly ch: number };
+		readonly to: { readonly line: number; readonly ch: number };
+	};
 	readonly markdown: string;
 }
 

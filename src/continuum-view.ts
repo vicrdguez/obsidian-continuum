@@ -70,7 +70,7 @@ export class ContinuumView extends ItemView {
 			});
 			const typeIcon = header.createSpan({
 				cls: 'continuum-entry-type',
-				attr: { title: identity.label, 'aria-label': identity.label },
+				attr: { title: identity.label, 'aria-label': identity.label, role: 'img' },
 			});
 			setIcon(typeIcon, identity.icon);
 

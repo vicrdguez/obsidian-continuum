@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
 	createContinuum,
 	type Continuum,
@@ -53,7 +53,11 @@ export class ContinuumController {
 			checkCallback: (checking) => {
 				const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
 				if (!view?.file || !canCollectCurrentBlock(view.getMode())) return false;
-				if (!checking) void this.addCurrentBlock(view);
+				if (!checking) {
+					void this.addCurrentBlock(view).catch(() => {
+						new Notice('Could not add the current block or selection.');
+					});
+				}
 				return true;
 			},
 		});
@@ -152,6 +156,10 @@ export class ContinuumController {
 					...(item.id ? { id: item.id } : {}),
 					parent: item.parent,
 					position: toRange(item.position),
+				})),
+				blocks: Object.values(cache?.blocks ?? {}).map((block) => ({
+					id: block.id,
+					position: toRange(block.position),
 				})),
 			},
 			automaticBlockIds: this.automaticBlockIds,

@@ -40,6 +40,10 @@ export interface SourceMetadata {
 		readonly parent: number;
 		readonly position: SourceRange;
 	}[];
+	readonly blocks?: readonly {
+		readonly id: string;
+		readonly position: SourceRange;
+	}[];
 }
 
 export interface CaptureInput {
@@ -133,6 +137,7 @@ function uniqueBlockId(input: CaptureInput): string {
 	const existing = new Set([
 		...(input.metadata.sections ?? []).flatMap(({ id }) => id ? [id] : []),
 		...(input.metadata.listItems ?? []).flatMap(({ id }) => id ? [id] : []),
+		...(input.metadata.blocks ?? []).map(({ id }) => id),
 	]);
 	let candidate: string;
 	do candidate = input.generateId();
@@ -152,6 +157,10 @@ function snapshot(input: CaptureInput, start: number, end: number): CapturePlan 
 			sourcePath: input.metadata.path,
 			markdown: input.markdown.slice(start, end),
 			sourceContext: sourceContext(input, start),
+			sourceRange: {
+				from: editorPosition(offsetPosition(input.markdown, start)),
+				to: editorPosition(offsetPosition(input.markdown, end)),
+			},
 		},
 	};
 }
@@ -178,12 +187,9 @@ interface DerivedBlock {
 }
 
 function blockAt(metadata: SourceMetadata, offset: number, markdown: string): DerivedBlock | undefined {
-	let headingIndex = -1;
-	for (let index = 0; index < (metadata.headings?.length ?? 0); index += 1) {
-		if ((metadata.headings?.[index]?.position.start.offset ?? Infinity) <= offset) {
-			headingIndex = index;
-		}
-	}
+	const headingIndex = metadata.headings?.findIndex(
+		({ position }) => contains(position, offset),
+	) ?? -1;
 	if (headingIndex >= 0 && metadata.headings) {
 		const heading = metadata.headings[headingIndex];
 		if (heading) {
@@ -219,20 +225,29 @@ function blockAt(metadata: SourceMetadata, offset: number, markdown: string): De
 			(latest, item) => item.position.end.offset > latest.offset ? item.position.end : latest,
 			listItem.position.end,
 		);
+		const range = { start: listItem.position.start, end };
+		const id = listItem.id ?? blockIdFor(metadata, range);
 		return {
-			range: { start: listItem.position.start, end },
+			range,
 			type: 'list',
-			...(listItem.id ? { subpath: `#^${listItem.id}` } : {}),
+			...(id ? { subpath: `#^${id}` } : {}),
 		};
 	}
 
 	const section = metadata.sections?.find(({ position }) => contains(position, offset));
 	if (!section) return undefined;
+	const id = section.id ?? blockIdFor(metadata, section.position);
 	return {
 		range: section.position,
 		type: section.type,
-		...(section.id ? { subpath: `#^${section.id}` } : {}),
+		...(id ? { subpath: `#^${id}` } : {}),
 	};
+}
+
+function blockIdFor(metadata: SourceMetadata, range: SourceRange): string | undefined {
+	return metadata.blocks?.find(({ position }) =>
+		position.start.offset === range.start.offset &&
+		position.end.offset === range.end.offset)?.id;
 }
 
 function offsetPosition(markdown: string, offset: number): SourcePosition {

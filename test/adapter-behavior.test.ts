@@ -24,6 +24,7 @@ void test('entry identity exposes compact accessible Live and Snapshot indicator
 			type: 'snapshot',
 			sourcePath: 'Research.md',
 			sourceContext: 'Methods',
+			sourceRange: { from: { line: 2, ch: 0 }, to: { line: 2, ch: 7 } },
 			markdown: 'excerpt',
 		},
 	];

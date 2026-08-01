@@ -36,12 +36,12 @@ Add the contextual collection command and complete live/snapshot capture model, 
 - Keyboard text-range selection inside Continuum
 
 ## Definition of Done
-- [ ] Cursor-based capture chooses the agreed complete Markdown Block for every supported structure.
-- [ ] Editor selections take precedence and snapshots preserve arbitrary selected Markdown exactly.
-- [ ] Existing headings and block IDs create live entries without modifying their sources.
-- [ ] With automatic IDs disabled, unaddressed Blocks remain snapshots.
-- [ ] With automatic IDs enabled, cursor Blocks and character-for-character complete-Block selections receive safe native-style IDs and become live entries.
-- [ ] Partial and multi-block selections never cause source edits or selection expansion.
-- [ ] The contextual command is unavailable in Reading view while full-note collection remains available.
-- [ ] Live source addresses deduplicate while snapshot captures may duplicate.
-- [ ] Entry headers compactly and accessibly communicate source context and Live/Snapshot type.
+- [x] Cursor-based capture chooses the agreed complete Markdown Block for every supported structure.
+- [x] Editor selections take precedence and snapshots preserve arbitrary selected Markdown exactly.
+- [x] Existing headings and block IDs create live entries without modifying their sources.
+- [x] With automatic IDs disabled, unaddressed Blocks remain snapshots.
+- [x] With automatic IDs enabled, cursor Blocks and character-for-character complete-Block selections receive safe native-style IDs and become live entries.
+- [x] Partial and multi-block selections never cause source edits or selection expansion.
+- [x] The contextual command is unavailable in Reading view while full-note collection remains available.
+- [x] Live source addresses deduplicate while snapshot captures may duplicate.
+- [x] Entry headers compactly and accessibly communicate source context and Live/Snapshot type.

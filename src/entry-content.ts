@@ -1,4 +1,8 @@
-import type { LiveNoteEntry } from './continuum';
+import type {
+	LiveContentEntry,
+	LiveNoteEntry,
+	SnapshotEntry,
+} from './continuum';
 
 export interface EditorPosition {
 	readonly line: number;
@@ -49,21 +53,6 @@ export interface CaptureInput {
 }
 
 export type CapturedEntry = SnapshotEntry | LiveContentEntry;
-
-export interface SnapshotEntry {
-	readonly id: string;
-	readonly type: 'snapshot';
-	readonly sourcePath: string;
-	readonly markdown: string;
-}
-
-export interface LiveContentEntry {
-	readonly id: string;
-	readonly type: 'live-content';
-	readonly sourcePath: string;
-	readonly sourceAddress: string;
-	readonly markdown: string;
-}
 
 export interface CapturePlan {
 	readonly entry: CapturedEntry;

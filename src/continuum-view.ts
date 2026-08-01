@@ -70,17 +70,19 @@ export class ContinuumView extends ItemView {
 			if (!(file instanceof TFile)) continue;
 			const markdown = await this.app.vault.cachedRead(file);
 			const position = this.app.metadataCache.getFileCache(file)?.frontmatterPosition;
-			const resolved = resolveNote(entry, {
-				markdown,
-				...(position
-					? {
-						frontmatter: {
-							startOffset: position.start.offset,
-							endOffset: position.end.offset,
-						},
-					}
-					: {}),
-			});
+			const resolved = entry.type === 'live-note'
+				? resolveNote(entry, {
+					markdown,
+					...(position
+						? {
+							frontmatter: {
+								startOffset: position.start.offset,
+								endOffset: position.end.offset,
+							},
+						}
+						: {}),
+				})
+				: { sourcePath: entry.sourcePath, markdown: entry.markdown };
 			const body = article.createDiv({ cls: 'continuum-entry-body' });
 			await MarkdownRenderer.render(
 				this.app,

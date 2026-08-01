@@ -4,17 +4,34 @@ export interface LiveNoteEntry {
 	readonly sourcePath: string;
 }
 
+export interface LiveContentEntry {
+	readonly id: string;
+	readonly type: 'live-content';
+	readonly sourcePath: string;
+	readonly sourceAddress: string;
+	readonly markdown: string;
+}
+
+export interface SnapshotEntry {
+	readonly id: string;
+	readonly type: 'snapshot';
+	readonly sourcePath: string;
+	readonly markdown: string;
+}
+
+export type Entry = LiveNoteEntry | LiveContentEntry | SnapshotEntry;
+
 export interface PersistedContinuum {
-	readonly entries: readonly LiveNoteEntry[];
+	readonly entries: readonly Entry[];
 	readonly focusedId?: string;
 }
 
 export type ContinuumAction =
-	| { type: 'add-entry'; entry: LiveNoteEntry }
+	| { type: 'add-entry'; entry: Entry }
 	| { type: 'focus-entry'; id: string };
 
 export interface ContinuumChange {
-	readonly focusedEntry: LiveNoteEntry | undefined;
+	readonly focusedEntry: Entry | undefined;
 }
 
 export interface Continuum {
@@ -36,9 +53,10 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 	return {
 		dispatch(action) {
 			if (action.type === 'add-entry') {
-				const existing = entries.find(
-					(entry) => entry.sourcePath === action.entry.sourcePath,
-				);
+				const address = stableAddress(action.entry);
+				const existing = address
+					? entries.find((entry) => stableAddress(entry) === address)
+					: undefined;
 				if (existing) focusedId = existing.id;
 				else {
 					entries.push({ ...action.entry });
@@ -56,13 +74,20 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 	};
 }
 
-function uniqueEntries(entries: readonly LiveNoteEntry[]): LiveNoteEntry[] {
-	const sourcePaths = new Set<string>();
+function stableAddress(entry: Entry): string | undefined {
+	if (entry.type === 'live-note') return entry.sourcePath;
+	if (entry.type === 'live-content') return entry.sourceAddress;
+	return undefined;
+}
+
+function uniqueEntries(entries: readonly Entry[]): Entry[] {
+	const addresses = new Set<string>();
 	const ids = new Set<string>();
-	return entries.filter(({ id, sourcePath }) => {
-		if (ids.has(id) || sourcePaths.has(sourcePath)) return false;
-		ids.add(id);
-		sourcePaths.add(sourcePath);
+	return entries.filter((entry) => {
+		const address = stableAddress(entry);
+		if (ids.has(entry.id) || (address !== undefined && addresses.has(address))) return false;
+		ids.add(entry.id);
+		if (address !== undefined) addresses.add(address);
 		return true;
 	}).map((entry) => ({ ...entry }));
 }

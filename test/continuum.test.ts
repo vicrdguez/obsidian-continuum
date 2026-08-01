@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createContinuum, type LiveNoteEntry } from '../src/continuum';
+import { createContinuum, type Entry, type LiveNoteEntry } from '../src/continuum';
 
 const alpha: LiveNoteEntry = {
 	id: 'alpha',
@@ -38,6 +38,33 @@ void test('focuses an existing live note instead of duplicating it', () => {
 		entries: [alpha, beta],
 		focusedId: 'alpha',
 	});
+});
+
+void test('deduplicates live source addresses but appends duplicate snapshots', () => {
+	const live: Entry = {
+		id: 'live',
+		type: 'live-content',
+		sourcePath: 'Notes/Alpha.md',
+		sourceAddress: 'Notes/Alpha.md#^block1',
+		markdown: 'Live block',
+	};
+	const snapshot: Entry = {
+		id: 'snapshot',
+		type: 'snapshot',
+		sourcePath: 'Notes/Alpha.md',
+		markdown: 'Captured text',
+	};
+	const continuum = createContinuum({ entries: [live, snapshot], focusedId: 'snapshot' });
+
+	continuum.dispatch({ type: 'add-entry', entry: { ...live, id: 'duplicate-live' } });
+	assert.equal(continuum.snapshot().focusedId, 'live');
+	continuum.dispatch({ type: 'add-entry', entry: { ...snapshot, id: 'second-snapshot' } });
+
+	assert.deepEqual(continuum.snapshot().entries, [
+		live,
+		snapshot,
+		{ ...snapshot, id: 'second-snapshot' },
+	]);
 });
 
 void test('restores valid ordered entries and focus from saved data', () => {

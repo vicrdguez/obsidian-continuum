@@ -1,6 +1,7 @@
-import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownRenderer, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import type { ContinuumController } from './continuum-controller';
 import { resolveNote } from './entry-content';
+import { entryHeader } from './entry-header';
 
 export const CONTINUUM_VIEW_TYPE = 'continuum';
 
@@ -56,15 +57,22 @@ export class ContinuumView extends ItemView {
 				attr: { 'data-entry-id': entry.id, tabindex: '0' },
 			});
 
-			article.createEl('button', {
+			const identity = entryHeader(entry);
+			const header = article.createDiv({ cls: 'continuum-entry-header' });
+			header.createEl('button', {
 				cls: 'continuum-source',
-				text: entry.sourcePath,
+				text: identity.source,
 				attr: {
 					type: 'button',
-					'aria-label': `Open source ${entry.sourcePath}`,
+					'aria-label': `Open source ${identity.source}`,
 					'data-source-path': entry.sourcePath,
 				},
 			});
+			const typeIcon = header.createSpan({
+				cls: 'continuum-entry-type',
+				attr: { title: identity.label, 'aria-label': identity.label },
+			});
+			setIcon(typeIcon, identity.icon);
 
 			const file = this.app.vault.getAbstractFileByPath(entry.sourcePath);
 			if (!(file instanceof TFile)) continue;

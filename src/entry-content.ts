@@ -123,6 +123,7 @@ function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
 			sourcePath: input.metadata.path,
 			sourceAddress: `${input.metadata.path}${subpath}`,
 			markdown,
+			sourceContext: sourceContext(input, block.range.start.offset),
 		},
 		...(sourceEdit ? { sourceEdit } : {}),
 	};
@@ -150,8 +151,18 @@ function snapshot(input: CaptureInput, start: number, end: number): CapturePlan 
 			type: 'snapshot',
 			sourcePath: input.metadata.path,
 			markdown: input.markdown.slice(start, end),
+			sourceContext: sourceContext(input, start),
 		},
 	};
+}
+
+function sourceContext(input: CaptureInput, offset: number): string {
+	let context = input.metadata.path;
+	for (const heading of input.metadata.headings ?? []) {
+		if (heading.position.start.offset > offset) break;
+		context = heading.heading;
+	}
+	return context;
 }
 
 function editorRangeToOffsets(markdown: string, range: EditorRange): { start: number; end: number } {
@@ -193,8 +204,23 @@ function blockAt(metadata: SourceMetadata, offset: number, markdown: string): De
 		?.filter(({ position }) => contains(position, offset))
 		.sort((left, right) => right.position.start.offset - left.position.start.offset)[0];
 	if (listItem) {
+		const byLine = new Map(metadata.listItems?.map((item) => [item.position.start.line, item]));
+		const descendants = metadata.listItems?.filter((item) => {
+			const seen = new Set<number>();
+			let parent = byLine.get(item.parent);
+			while (parent && !seen.has(parent.position.start.line)) {
+				if (parent === listItem) return true;
+				seen.add(parent.position.start.line);
+				parent = byLine.get(parent.parent);
+			}
+			return false;
+		}) ?? [];
+		const end = descendants.reduce(
+			(latest, item) => item.position.end.offset > latest.offset ? item.position.end : latest,
+			listItem.position.end,
+		);
 		return {
-			range: listItem.position,
+			range: { start: listItem.position.start, end },
 			type: 'list',
 			...(listItem.id ? { subpath: `#^${listItem.id}` } : {}),
 		};

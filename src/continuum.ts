@@ -2,6 +2,7 @@ export interface LiveNoteEntry {
 	readonly id: string;
 	readonly type: 'live-note';
 	readonly sourcePath: string;
+	readonly sourceContext?: string;
 }
 
 export interface LiveContentEntry {
@@ -9,6 +10,7 @@ export interface LiveContentEntry {
 	readonly type: 'live-content';
 	readonly sourcePath: string;
 	readonly sourceAddress: string;
+	readonly sourceContext?: string;
 	readonly markdown: string;
 }
 
@@ -16,6 +18,7 @@ export interface SnapshotEntry {
 	readonly id: string;
 	readonly type: 'snapshot';
 	readonly sourcePath: string;
+	readonly sourceContext?: string;
 	readonly markdown: string;
 }
 

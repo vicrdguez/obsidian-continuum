@@ -4,17 +4,21 @@ import {
 	type Continuum,
 	type PersistedContinuum,
 } from './continuum';
-import { captureNote } from './entry-content';
+import { capture, captureNote, type SourceRange } from './entry-content';
+import { canCollectCurrentBlock } from './editor-command';
 import { CONTINUUM_VIEW_TYPE, ContinuumView } from './continuum-view';
+import { ContinuumSettingTab } from './settings';
 
 type WorkspaceArea = 'left' | 'right' | 'main';
 
 interface ContinuumData extends PersistedContinuum {
 	readonly area?: WorkspaceArea;
+	readonly automaticBlockIds?: boolean;
 }
 
 export class ContinuumController {
 	readonly continuum: Continuum;
+	automaticBlockIds: boolean;
 	private area: WorkspaceArea;
 	private recentMarkdownLeaf: WorkspaceLeaf | null = null;
 
@@ -24,6 +28,7 @@ export class ContinuumController {
 	) {
 		this.continuum = createContinuum(saved);
 		this.area = saved?.area ?? 'right';
+		this.automaticBlockIds = saved?.automaticBlockIds === true;
 	}
 
 	static async load(plugin: Plugin): Promise<ContinuumController> {
@@ -32,6 +37,7 @@ export class ContinuumController {
 	}
 
 	register(): void {
+		this.plugin.addSettingTab(new ContinuumSettingTab(this.plugin.app, this.plugin, this));
 		this.plugin.registerView(
 			CONTINUUM_VIEW_TYPE,
 			(leaf) => new ContinuumView(leaf, this),
@@ -40,6 +46,16 @@ export class ContinuumController {
 			id: 'focus-continuum',
 			name: 'Focus Continuum',
 			callback: () => void this.openContinuum(true),
+		});
+		this.plugin.addCommand({
+			id: 'add-current-block-or-selection',
+			name: 'Add current block or selection',
+			checkCallback: (checking) => {
+				const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view?.file || !canCollectCurrentBlock(view.getMode())) return false;
+				if (!checking) void this.addCurrentBlock(view);
+				return true;
+			},
 		});
 		this.plugin.addCommand({
 			id: 'add-current-note',
@@ -77,6 +93,11 @@ export class ContinuumController {
 		});
 	}
 
+	async setAutomaticBlockIds(value: boolean): Promise<void> {
+		this.automaticBlockIds = value;
+		await this.saveSnapshot();
+	}
+
 	async focusEntry(id: string): Promise<void> {
 		this.continuum.dispatch({ type: 'focus-entry', id });
 		await this.saveSnapshot();
@@ -100,6 +121,56 @@ export class ContinuumController {
 		this.recentMarkdownLeaf = leaf;
 	}
 
+	private async addCurrentBlock(view: MarkdownView): Promise<void> {
+		if (!view.file) return;
+		const markdown = view.getViewData();
+		const cache = this.plugin.app.metadataCache.getFileCache(view.file);
+		const toRange = (position: { start: { line: number; col: number; offset: number }; end: { line: number; col: number; offset: number } }): SourceRange => ({
+			start: { line: position.start.line, ch: position.start.col, offset: position.start.offset },
+			end: { line: position.end.line, ch: position.end.col, offset: position.end.offset },
+		});
+		const editor = view.editor;
+		const plan = capture({
+			markdown,
+			cursor: editor.getCursor(),
+			selection: editor.somethingSelected()
+				? { from: editor.getCursor('from'), to: editor.getCursor('to') }
+				: null,
+			metadata: {
+				path: view.file.path,
+				sections: cache?.sections?.map((section) => ({
+					type: section.type,
+					...(section.id ? { id: section.id } : {}),
+					position: toRange(section.position),
+				})),
+				headings: cache?.headings?.map((heading) => ({
+					heading: heading.heading,
+					level: heading.level,
+					position: toRange(heading.position),
+				})),
+				listItems: cache?.listItems?.map((item) => ({
+					...(item.id ? { id: item.id } : {}),
+					parent: item.parent,
+					position: toRange(item.position),
+				})),
+			},
+			automaticBlockIds: this.automaticBlockIds,
+			generateId: generateBlockId,
+			entryId: crypto.randomUUID(),
+		});
+		if (plan.sourceEdit) {
+			editor.replaceRange(
+				plan.sourceEdit.replacement,
+				plan.sourceEdit.range.from,
+				plan.sourceEdit.range.to,
+			);
+		}
+		this.recentMarkdownLeaf = view.leaf;
+		const focusedElement = view.containerEl.ownerDocument.activeElement;
+		const change = this.continuum.dispatch({ type: 'add-entry', entry: plan.entry });
+		await this.presentChange(change.focusedEntry?.id, focusedElement);
+	}
+
 	private async addCurrentNote(view: MarkdownView): Promise<void> {
 		if (!view.file) return;
 		this.recentMarkdownLeaf = view.leaf;
@@ -108,13 +179,15 @@ export class ContinuumController {
 			type: 'add-entry',
 			entry: captureNote({ id: crypto.randomUUID(), path: view.file.path }),
 		});
+		await this.presentChange(change.focusedEntry?.id, focusedElement);
+	}
+
+	private async presentChange(focusedId: string | undefined, focusedElement: Element | null): Promise<void> {
 		await this.saveSnapshot();
 		const continuumView = await this.openContinuum(false);
 		await this.renderViews();
-		if (change.focusedEntry) {
-			continuumView.focusEntry(change.focusedEntry.id);
-			if (focusedElement instanceof HTMLElement) focusedElement.focus();
-		}
+		if (focusedId) continuumView.focusEntry(focusedId);
+		if (focusedElement instanceof HTMLElement) focusedElement.focus();
 	}
 
 	private async openContinuum(focus: boolean): Promise<ContinuumView> {
@@ -169,6 +242,16 @@ export class ContinuumController {
 	}
 
 	private async saveSnapshot(): Promise<void> {
-		await this.plugin.saveData({ ...this.continuum.snapshot(), area: this.area });
+		await this.plugin.saveData({
+			...this.continuum.snapshot(),
+			area: this.area,
+			automaticBlockIds: this.automaticBlockIds,
+		});
 	}
+}
+
+function generateBlockId(): string {
+	const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+	return Array.from(crypto.getRandomValues(new Uint8Array(6)),
+		(value) => alphabet[value % alphabet.length]).join('');
 }

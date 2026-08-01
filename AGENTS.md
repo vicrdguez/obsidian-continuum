@@ -267,3 +267,25 @@ this.registerInterval(
 - Developer policies: https://docs.obsidian.md/Developer+policies
 - Plugin guidelines: https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines
 - Style guide: https://help.obsidian.md/style-guide
+
+<!-- dev-pipeline:start -->
+## Dev pipeline
+
+This repo is developed through a staged pipeline. Each stage is a skill; invoke the stage you are asked to perform.
+
+| Stage | Skill | When |
+|---|---|---|
+| Explore | `explore` | Interview to reach shared understanding; durable docs via `domain` |
+| Propose | `propose` | Materialize the conversation into tracer-bullet slices on the board |
+| Implement | `implement` | Claim one slice, TDD it at the pinned seams, refactor via `audit`, submit |
+| Watchdog | `watchdog` | Adversarial double verification in a fresh context; lands or bounces |
+| Merge | human | Accepts the change; the acceptance gate |
+
+Reference skills: `design` (deep modules & seams), `domain` (glossary, ADRs, capabilities), `tdd` (the red → green loop), `audit` (two-axis review engine).
+
+- Board protocol: `docs/github.md`. Labels: `ready` → `wip` → `review` → `done`, with `rework` for bounces and `needs-human` for a paused decision.
+- Change artifacts: `.changes/<slug>/` on the slice branch, frozen at proposal apart from `[ ]` → `[x]`; archived to `.changes/archive/<date>-<slug>/` on a watchdog pass.
+- Review findings: stable `W1`, `W2`, … IDs per PR. The first review is complete; later rounds read only what changed since the previous `Reviewed head`.
+- Worktrees: `.worktrees/<slug>`, one per slice, gitignored.
+- Durable docs: `CONTEXT.md` (glossary), `docs/adr/`, `docs/capabilities/`.
+<!-- dev-pipeline:end -->

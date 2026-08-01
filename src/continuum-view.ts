@@ -1,11 +1,17 @@
 import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from 'obsidian';
-import type ContinuumPlugin from './main';
+import type { Continuum } from './continuum';
 import { resolveNote } from './entry-content';
 
 export const CONTINUUM_VIEW_TYPE = 'continuum';
 
+interface ContinuumHost {
+	readonly continuum: Continuum;
+	focusEntry(id: string): Promise<void>;
+	openSource(path: string): Promise<void>;
+}
+
 export class ContinuumView extends ItemView {
-	constructor(leaf: WorkspaceLeaf, private readonly plugin: ContinuumPlugin) {
+	constructor(leaf: WorkspaceLeaf, private readonly plugin: ContinuumHost) {
 		super(leaf);
 	}
 

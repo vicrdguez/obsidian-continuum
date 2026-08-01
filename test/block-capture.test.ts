@@ -218,6 +218,32 @@ void test('opted-in cursor and exact Block selections receive collision-checked 
 	}
 });
 
+void test('adds a native ID to the selected list item without moving its descendants', () => {
+	const markdown = '- Parent\n  - Child\n    continuation\n  - Sibling';
+	const childStart = markdown.indexOf('  - Child');
+	const childEnd = markdown.indexOf('\n  - Sibling');
+	const child = range(markdown, childStart + 2, childEnd);
+	const plan = capture({
+		markdown,
+		cursor: range(markdown, childStart + 4, childStart + 4).start,
+		selection: null,
+		metadata: {
+			path: 'Source.md',
+			sections: [{ type: 'list', position: range(markdown, 0, markdown.length) }],
+			listItems: [
+				{ parent: 0, position: range(markdown, 0, markdown.length) },
+				{ parent: 0, position: child },
+				{ parent: 0, position: range(markdown, childEnd + 1, markdown.length) },
+			],
+		},
+		automaticBlockIds: true,
+		generateId: () => 'list01',
+		entryId: 'list',
+	});
+
+	assert.equal(plan.sourceEdit?.replacement, '- Child ^list01\n    continuation');
+});
+
 void test('inexact selections stay exact snapshots and never edit their source', () => {
 	const markdown = 'First block\n\nSecond block';
 	const first = range(markdown, 0, 'First block'.length);

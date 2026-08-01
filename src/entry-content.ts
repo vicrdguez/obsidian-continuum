@@ -114,7 +114,7 @@ function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
 				from: editorPosition(block.range.start),
 				to: editorPosition(block.range.end),
 			},
-			replacement: addBlockId(markdown, block.type, id),
+			replacement: addBlockId(markdown, block.type, block.range.start.ch, id),
 		};
 	}
 	if (!subpath) return snapshot(input, block.range.start.offset, block.range.end.offset);
@@ -131,14 +131,9 @@ function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
 	};
 }
 
-function addBlockId(markdown: string, type: string, id: string): string {
+function addBlockId(markdown: string, type: string, indentation: number, id: string): string {
 	if (type === 'paragraph') return `${markdown} ^${id}`;
-	if (type === 'list') {
-		const newline = markdown.indexOf('\n');
-		return newline < 0
-			? `${markdown} ^${id}`
-			: `${markdown.slice(0, newline)} ^${id}${markdown.slice(newline)}`;
-	}
+	if (type === 'list') return `${markdown}\n${' '.repeat(indentation)}^${id}`;
 	return `${markdown}\n^${id}`;
 }
 

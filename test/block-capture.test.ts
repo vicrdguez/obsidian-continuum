@@ -241,7 +241,7 @@ void test('adds a native ID to the selected list item without moving its descend
 		entryId: 'list',
 	});
 
-	assert.equal(plan.sourceEdit?.replacement, '- Child ^list01\n    continuation');
+	assert.equal(plan.sourceEdit?.replacement, '- Child\n    continuation\n  ^list01');
 });
 
 void test('inexact selections stay exact snapshots and never edit their source', () => {

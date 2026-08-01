@@ -14,7 +14,6 @@ export type ContinuumAction =
 	| { type: 'focus-entry'; id: string };
 
 export interface ContinuumChange {
-	readonly snapshot: PersistedContinuum;
 	readonly focusedEntry: LiveNoteEntry | undefined;
 }
 
@@ -49,10 +48,8 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 				focusedId = action.id;
 			}
 
-			const current = snapshot();
 			return {
-				snapshot: current,
-				focusedEntry: current.entries.find(({ id }) => id === focusedId),
+				focusedEntry: entries.find(({ id }) => id === focusedId),
 			};
 		},
 		snapshot,

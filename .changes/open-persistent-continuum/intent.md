@@ -35,10 +35,10 @@ Replace the sample plugin with the first complete Continuum path: open a movable
 - Obsidian Mobile
 
 ## Definition of Done
-- [ ] The Continuum view opens in the correct workspace area, remains movable, and can be focused without a ribbon or default hotkey.
-- [ ] `Add current note` works from every Markdown view mode, appends a live entry, reveals Continuum, and leaves keyboard focus in the source.
-- [ ] A note entry renders the note's current body without YAML properties and cannot edit task state.
-- [ ] Adding a note already present keeps one entry and focuses that existing entry.
-- [ ] Entries and focus survive plugin reloads and Obsidian restarts.
-- [ ] Activating a note entry's source opens it in Live Preview without replacing Continuum.
-- [ ] The production build and lint pass, and model/content behavior runs through the repository test command.
+- [x] The Continuum view opens in the correct workspace area, remains movable, and can be focused without a ribbon or default hotkey.
+- [x] `Add current note` works from every Markdown view mode, appends a live entry, reveals Continuum, and leaves keyboard focus in the source.
+- [x] A note entry renders the note's current body without YAML properties and cannot edit task state.
+- [x] Adding a note already present keeps one entry and focuses that existing entry.
+- [x] Entries and focus survive plugin reloads and Obsidian restarts.
+- [x] Activating a note entry's source opens it in Live Preview without replacing Continuum.
+- [x] The production build and lint pass, and model/content behavior runs through the repository test command.

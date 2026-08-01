@@ -79,7 +79,7 @@ export default class ContinuumPlugin extends Plugin {
 		const leaf = this.recentMarkdownLeaf ?? this.app.workspace.getLeaf('tab');
 		await leaf.openFile(file, {
 			active: true,
-			state: { mode: 'source', source: true },
+			state: { mode: 'source', source: false },
 		});
 		this.recentMarkdownLeaf = leaf;
 	}

@@ -22,6 +22,17 @@ export class ContinuumView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		this.registerDomEvent(this.contentEl, 'focusin', (event) => {
+			const article = (event.target as Element).closest<HTMLElement>('[data-entry-id]');
+			if (!article) return;
+			this.contentEl.querySelector('.is-focused')?.removeClass('is-focused');
+			article.addClass('is-focused');
+			void this.plugin.focusEntry(article.dataset.entryId ?? '');
+		});
+		this.registerDomEvent(this.contentEl, 'click', (event) => {
+			const source = (event.target as Element).closest<HTMLElement>('[data-source-path]');
+			if (source?.dataset.sourcePath) void this.plugin.openSource(source.dataset.sourcePath);
+		});
 		await this.render();
 	}
 
@@ -44,19 +55,15 @@ export class ContinuumView extends ItemView {
 				cls: `continuum-entry${entry.id === snapshot.focusedId ? ' is-focused' : ''}`,
 				attr: { 'data-entry-id': entry.id, tabindex: '0' },
 			});
-			article.addEventListener('focusin', () => {
-				container.querySelector('.is-focused')?.removeClass('is-focused');
-				article.addClass('is-focused');
-				void this.plugin.focusEntry(entry.id);
-			});
 
-			const source = article.createEl('button', {
+			article.createEl('button', {
 				cls: 'continuum-source',
 				text: entry.sourcePath,
-				attr: { type: 'button', 'aria-label': `Open source ${entry.sourcePath}` },
-			});
-			source.addEventListener('click', () => {
-				void this.plugin.openSource(entry.sourcePath);
+				attr: {
+					type: 'button',
+					'aria-label': `Open source ${entry.sourcePath}`,
+					'data-source-path': entry.sourcePath,
+				},
 			});
 
 			const file = this.app.vault.getAbstractFileByPath(entry.sourcePath);

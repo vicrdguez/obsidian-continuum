@@ -1,12 +1,13 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-continuum",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Collect live notes into one persistent reading flow.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "esbuild test/*.test.ts --bundle --platform=node --format=esm --outdir=.test-dist && node --test .test-dist/*.test.js",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"lint": "eslint ."
 	},

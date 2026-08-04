@@ -35,7 +35,8 @@ export interface PersistedContinuum {
 
 export type ContinuumAction =
 	| { type: 'add-entry'; entry: Entry }
-	| { type: 'focus-entry'; id: string };
+	| { type: 'focus-entry'; id: string }
+	| { type: 'restore'; saved: PersistedContinuum };
 
 export interface ContinuumChange {
 	readonly focusedEntry: Entry | undefined;
@@ -47,7 +48,7 @@ export interface Continuum {
 }
 
 export function createContinuum(saved?: PersistedContinuum): Continuum {
-	const entries = uniqueEntries(saved?.entries ?? []);
+	let entries = uniqueEntries(saved?.entries ?? []);
 	let focusedId = entries.some(({ id }) => id === saved?.focusedId)
 		? saved?.focusedId
 		: undefined;
@@ -69,6 +70,11 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 					entries.push({ ...action.entry });
 					focusedId = action.entry.id;
 				}
+			} else if (action.type === 'restore') {
+				entries = uniqueEntries(action.saved.entries);
+				focusedId = entries.some(({ id }) => id === action.saved.focusedId)
+					? action.saved.focusedId
+					: undefined;
 			} else if (entries.some(({ id }) => id === action.id)) {
 				focusedId = action.id;
 			}
@@ -79,6 +85,30 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 		},
 		snapshot,
 	};
+}
+
+/**
+ * Adds an entry as one unit of work: nothing durable happens unless the entry is
+ * persisted first. A `persist` rejection rolls the Continuum back and skips
+ * `applySourceEdit`, so a failed save can never leave a block ID in a note that no
+ * saved entry refers to.
+ */
+export async function commitEntry(
+	continuum: Continuum,
+	entry: Entry,
+	persist: (snapshot: PersistedContinuum) => Promise<void>,
+	applySourceEdit?: () => void,
+): Promise<ContinuumChange> {
+	const previous = continuum.snapshot();
+	const change = continuum.dispatch({ type: 'add-entry', entry });
+	try {
+		await persist(continuum.snapshot());
+	} catch (error) {
+		continuum.dispatch({ type: 'restore', saved: previous });
+		throw error;
+	}
+	applySourceEdit?.();
+	return change;
 }
 
 function stableAddress(entry: Entry): string | undefined {

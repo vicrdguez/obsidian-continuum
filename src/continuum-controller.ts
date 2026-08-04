@@ -1,5 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
+	commitEntry,
 	createContinuum,
 	type Continuum,
 	type PersistedContinuum,
@@ -67,7 +68,11 @@ export class ContinuumController {
 			checkCallback: (checking) => {
 				const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
 				if (!view?.file) return false;
-				if (!checking) void this.addCurrentNote(view);
+				if (!checking) {
+					void this.addCurrentNote(view).catch(() => {
+						new Notice('Could not add the current note.');
+					});
+				}
 				return true;
 			},
 		});
@@ -166,16 +171,17 @@ export class ContinuumController {
 			generateId: generateBlockId,
 			entryId: crypto.randomUUID(),
 		});
-		if (plan.sourceEdit) {
-			editor.replaceRange(
-				plan.sourceEdit.replacement,
-				plan.sourceEdit.range.from,
-				plan.sourceEdit.range.to,
-			);
-		}
+		const { sourceEdit } = plan;
 		this.recentMarkdownLeaf = view.leaf;
 		const focusedElement = view.containerEl.ownerDocument.activeElement;
-		const change = this.continuum.dispatch({ type: 'add-entry', entry: plan.entry });
+		const change = await commitEntry(
+			this.continuum,
+			plan.entry,
+			(snapshot) => this.saveSnapshot(snapshot),
+			sourceEdit && (() => {
+				editor.replaceRange(sourceEdit.replacement, sourceEdit.range.from, sourceEdit.range.to);
+			}),
+		);
 		await this.presentChange(change.focusedEntry?.id, focusedElement);
 	}
 
@@ -183,15 +189,15 @@ export class ContinuumController {
 		if (!view.file) return;
 		this.recentMarkdownLeaf = view.leaf;
 		const focusedElement = view.containerEl.ownerDocument.activeElement;
-		const change = this.continuum.dispatch({
-			type: 'add-entry',
-			entry: captureNote({ id: crypto.randomUUID(), path: view.file.path }),
-		});
+		const change = await commitEntry(
+			this.continuum,
+			captureNote({ id: crypto.randomUUID(), path: view.file.path }),
+			(snapshot) => this.saveSnapshot(snapshot),
+		);
 		await this.presentChange(change.focusedEntry?.id, focusedElement);
 	}
 
 	private async presentChange(focusedId: string | undefined, focusedElement: Element | null): Promise<void> {
-		await this.saveSnapshot();
 		const continuumView = await this.openContinuum(false);
 		await this.renderViews();
 		if (focusedId) continuumView.focusEntry(focusedId);
@@ -249,9 +255,9 @@ export class ContinuumController {
 		);
 	}
 
-	private async saveSnapshot(): Promise<void> {
+	private async saveSnapshot(snapshot = this.continuum.snapshot()): Promise<void> {
 		await this.plugin.saveData({
-			...this.continuum.snapshot(),
+			...snapshot,
 			area: this.area,
 			automaticBlockIds: this.automaticBlockIds,
 		});

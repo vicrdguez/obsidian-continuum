@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createContinuum, type Entry, type LiveNoteEntry } from '../src/continuum';
+import { commitEntry, createContinuum, type Entry, type LiveNoteEntry } from '../src/continuum';
 
 const alpha: LiveNoteEntry = {
 	id: 'alpha',
@@ -66,6 +66,40 @@ void test('deduplicates live source addresses but appends duplicate snapshots', 
 		snapshot,
 		{ ...snapshot, id: 'second-snapshot' },
 	]);
+});
+
+void test('a failed save edits no source and leaves the Continuum untouched', async () => {
+	const continuum = createContinuum({ entries: [alpha], focusedId: 'alpha' });
+	const before = continuum.snapshot();
+	let sourceEdits = 0;
+
+	await assert.rejects(
+		commitEntry(continuum, beta, () => Promise.reject(new Error('disk full')), () => {
+			sourceEdits += 1;
+		}),
+		/disk full/,
+	);
+
+	assert.equal(sourceEdits, 0);
+	assert.deepEqual(continuum.snapshot(), before);
+});
+
+void test('a successful save edits the source and keeps the added entry', async () => {
+	const continuum = createContinuum({ entries: [alpha], focusedId: 'alpha' });
+	const saved: unknown[] = [];
+	let sourceEdits = 0;
+
+	const change = await commitEntry(
+		continuum,
+		beta,
+		(snapshot) => { saved.push(snapshot); return Promise.resolve(); },
+		() => { sourceEdits += 1; },
+	);
+
+	assert.equal(change.focusedEntry?.id, 'beta');
+	assert.equal(sourceEdits, 1);
+	assert.deepEqual(saved, [{ entries: [alpha, beta], focusedId: 'beta' }]);
+	assert.deepEqual(continuum.snapshot(), { entries: [alpha, beta], focusedId: 'beta' });
 });
 
 void test('restores valid ordered entries and focus from saved data', () => {

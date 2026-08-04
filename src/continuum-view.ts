@@ -1,7 +1,7 @@
 import { ItemView, MarkdownRenderer, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import type { ContinuumController } from './continuum-controller';
 import { resolveEntry, type SourceDocument } from './entry-content';
-import { entryHeader } from './entry-header';
+import { renderEntryHeader } from './entry-header';
 
 export const CONTINUUM_VIEW_TYPE = 'continuum';
 
@@ -57,22 +57,7 @@ export class ContinuumView extends ItemView {
 				attr: { 'data-entry-id': entry.id, tabindex: '0' },
 			});
 
-			const identity = entryHeader(entry);
-			const header = article.createDiv({ cls: 'continuum-entry-header' });
-			header.createEl('button', {
-				cls: 'continuum-source',
-				text: identity.source,
-				attr: {
-					type: 'button',
-					'aria-label': `Open source ${identity.source}`,
-					'data-source-path': entry.sourcePath,
-				},
-			});
-			const typeIcon = header.createSpan({
-				cls: 'continuum-entry-type',
-				attr: { title: identity.label, 'aria-label': identity.label, role: 'img' },
-			});
-			setIcon(typeIcon, identity.icon);
+			renderEntryHeader(article, entry, setIcon);
 
 			const resolved = await resolveEntry(entry, (path) => this.readSource(path));
 			if (!resolved) continue;

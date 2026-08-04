@@ -1,4 +1,5 @@
 import type {
+	Entry,
 	LiveContentEntry,
 	LiveNoteEntry,
 	SnapshotEntry,
@@ -272,6 +273,21 @@ function positionToOffset(markdown: string, position: EditorPosition): number {
 		offset = markdown.indexOf('\n', offset) + 1;
 	}
 	return offset + position.ch;
+}
+
+/**
+ * Only live note entries depend on the current file; every other entry renders the
+ * Markdown it stored at capture time, so `readSource` must stay unused for them.
+ */
+export async function resolveEntry(
+	entry: Entry,
+	readSource: (path: string) => Promise<SourceDocument | null>,
+): Promise<ResolvedEntry | undefined> {
+	if (entry.type !== 'live-note') {
+		return { sourcePath: entry.sourcePath, markdown: entry.markdown };
+	}
+	const source = await readSource(entry.sourcePath);
+	return source ? resolveNote(entry, source) : undefined;
 }
 
 export function resolveNote(

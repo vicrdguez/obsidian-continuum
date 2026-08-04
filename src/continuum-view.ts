@@ -1,6 +1,7 @@
-import { ItemView, MarkdownRenderer, TFile, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownRenderer, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import type { ContinuumController } from './continuum-controller';
-import { resolveNote } from './entry-content';
+import { resolveEntry, type SourceDocument } from './entry-content';
+import { renderEntryHeader } from './entry-header';
 
 export const CONTINUUM_VIEW_TYPE = 'continuum';
 
@@ -56,31 +57,10 @@ export class ContinuumView extends ItemView {
 				attr: { 'data-entry-id': entry.id, tabindex: '0' },
 			});
 
-			article.createEl('button', {
-				cls: 'continuum-source',
-				text: entry.sourcePath,
-				attr: {
-					type: 'button',
-					'aria-label': `Open source ${entry.sourcePath}`,
-					'data-source-path': entry.sourcePath,
-				},
-			});
+			renderEntryHeader(article, entry, setIcon);
 
-			const file = this.app.vault.getAbstractFileByPath(entry.sourcePath);
-			if (!(file instanceof TFile)) continue;
-			const markdown = await this.app.vault.cachedRead(file);
-			const position = this.app.metadataCache.getFileCache(file)?.frontmatterPosition;
-			const resolved = resolveNote(entry, {
-				markdown,
-				...(position
-					? {
-						frontmatter: {
-							startOffset: position.start.offset,
-							endOffset: position.end.offset,
-						},
-					}
-					: {}),
-			});
+			const resolved = await resolveEntry(entry, (path) => this.readSource(path));
+			if (!resolved) continue;
 			const body = article.createDiv({ cls: 'continuum-entry-body' });
 			await MarkdownRenderer.render(
 				this.app,
@@ -92,6 +72,23 @@ export class ContinuumView extends ItemView {
 			body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
 				.forEach((checkbox) => { checkbox.disabled = true; });
 		}
+	}
+
+	private async readSource(path: string): Promise<SourceDocument | null> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return null;
+		const position = this.app.metadataCache.getFileCache(file)?.frontmatterPosition;
+		return {
+			markdown: await this.app.vault.cachedRead(file),
+			...(position
+				? {
+					frontmatter: {
+						startOffset: position.start.offset,
+						endOffset: position.end.offset,
+					},
+				}
+				: {}),
+		};
 	}
 
 	focusEntry(id: string): void {

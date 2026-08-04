@@ -40,12 +40,12 @@ export class ContinuumView extends ItemView {
 			const article = (event.target as Element).closest<HTMLElement>('[data-entry-id]');
 			const id = article?.dataset.entryId;
 			if (!id || id === this.controller.continuum.snapshot().focusedId) return;
-			void this.controller.focusEntry(id);
+			this.controller.focusEntry(id);
 		});
 		this.registerDomEvent(this.contentEl, 'click', (event) => {
 			const target = event.target as Element;
 			if (target.closest('[data-fold-all]')) {
-				void this.controller.toggleAllFolds();
+				this.controller.toggleAllFolds();
 				return;
 			}
 			const source = target.closest<HTMLElement>('[data-source-path]');
@@ -56,6 +56,8 @@ export class ContinuumView extends ItemView {
 
 	async render(): Promise<void> {
 		const container = this.contentEl;
+		// Re-rendering discards the focused element, which the pane keys depend on.
+		const hadFocus = container.contains(container.ownerDocument.activeElement);
 		container.empty();
 		container.addClass('continuum');
 		this.foldAllEl = null;
@@ -124,27 +126,28 @@ export class ContinuumView extends ItemView {
 		}
 
 		this.syncState();
+		if (hadFocus && snapshot.focusedId) {
+			this.entryEl(snapshot.focusedId)?.focus({ preventScroll: true });
+		}
 	}
 
 	/** Paints focus and fold state onto the rendered entries. Never moves focus. */
 	syncState(): void {
-		const { focusedId, foldedIds = [] } = this.controller.continuum.snapshot();
-		let expanded = 0;
+		const { entries, focusedId, foldedIds = [] } = this.controller.continuum.snapshot();
 		this.contentEl
 			.querySelectorAll<HTMLElement>('[data-entry-id]')
 			.forEach((article) => {
 				const id = article.dataset.entryId ?? '';
-				const folded = foldedIds.includes(id);
-				if (!folded) expanded += 1;
 				// Folding hides the body with `display: none`, which also takes it
 				// out of the accessibility tree; `aria-expanded` is invalid here.
-				article.toggleClass('is-folded', folded);
+				article.toggleClass('is-folded', foldedIds.includes(id));
 				article.toggleClass('is-focused', id === focusedId);
 			});
 
 		if (!this.foldAllEl) return;
-		const label = expanded > 0 ? 'Fold all entries' : 'Unfold all entries';
-		setIcon(this.foldAllEl, expanded > 0 ? 'chevrons-down-up' : 'chevrons-up-down');
+		const anyExpanded = foldedIds.length < entries.length;
+		const label = anyExpanded ? 'Fold all entries' : 'Unfold all entries';
+		setIcon(this.foldAllEl, anyExpanded ? 'chevrons-down-up' : 'chevrons-up-down');
 		this.foldAllEl.setAttr('aria-label', label);
 		this.foldAllEl.setAttr('title', label);
 	}

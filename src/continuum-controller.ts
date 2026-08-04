@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { debounce, MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
 	createContinuum,
 	type Continuum,
@@ -79,6 +79,7 @@ export class ContinuumController {
 			},
 		});
 		this.plugin.addSettingTab(new ContinuumSettingTab(this.plugin, this));
+		this.plugin.register(() => this.saveSnapshot.run());
 
 		this.plugin.registerEvent(
 			this.plugin.app.workspace.on('active-leaf-change', (leaf) => {
@@ -86,7 +87,7 @@ export class ContinuumController {
 			}),
 		);
 		this.plugin.registerEvent(
-			this.plugin.app.workspace.on('layout-change', () => void this.capturePlacement()),
+			this.plugin.app.workspace.on('layout-change', () => { this.capturePlacement(); }),
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('modify', (file) => {
@@ -105,20 +106,20 @@ export class ContinuumController {
 		});
 	}
 
-	async focusEntry(id: string): Promise<void> {
-		await this.apply({ type: 'focus-entry', id });
+	focusEntry(id: string): void {
+		this.dispatchAndSync({ type: 'focus-entry', id });
 	}
 
-	async toggleFold(id: string): Promise<void> {
-		await this.apply({ type: 'toggle-fold', id });
+	toggleFold(id: string): void {
+		this.dispatchAndSync({ type: 'toggle-fold', id });
 	}
 
-	async toggleAllFolds(): Promise<void> {
-		await this.apply({ type: 'toggle-all-folds' });
+	toggleAllFolds(): void {
+		this.dispatchAndSync({ type: 'toggle-all-folds' });
 	}
 
-	async navigate(direction: 'focus-next' | 'focus-previous'): Promise<void> {
-		const { focusedEntry } = await this.apply({ type: direction });
+	navigate(direction: 'focus-next' | 'focus-previous'): void {
+		const { focusedEntry } = this.dispatchAndSync({ type: direction });
 		if (focusedEntry) for (const view of this.views()) view.focusEntry(focusedEntry.id);
 	}
 
@@ -132,9 +133,9 @@ export class ContinuumController {
 		if (entry) await this.openSource(entry.sourcePath);
 	}
 
-	async saveSettings(patch: Partial<ContinuumSettings>): Promise<void> {
+	saveSettings(patch: Partial<ContinuumSettings>): void {
 		this.settings = { ...this.settings, ...patch };
-		await this.saveSnapshot();
+		this.saveSnapshot();
 	}
 
 	async openSource(path: string): Promise<void> {
@@ -163,7 +164,7 @@ export class ContinuumController {
 			type: 'add-entry',
 			entry: captureNote({ id: crypto.randomUUID(), path: view.file.path }),
 		});
-		await this.saveSnapshot();
+		this.saveSnapshot();
 		const continuumView = await this.openContinuum(false);
 		await this.renderViews();
 		if (change.focusedEntry) {
@@ -200,7 +201,7 @@ export class ContinuumController {
 		return this.plugin.app.workspace.getLeaf('tab');
 	}
 
-	private async capturePlacement(): Promise<void> {
+	private capturePlacement(): void {
 		const leaf = this.plugin.app.workspace.getLeavesOfType(CONTINUUM_VIEW_TYPE)[0];
 		if (!leaf) return;
 		const root = leaf.getRoot();
@@ -211,19 +212,19 @@ export class ContinuumController {
 				: 'main';
 		if (area !== this.area) {
 			this.area = area;
-			await this.saveSnapshot();
+			this.saveSnapshot();
 		}
 	}
 
-	private whenOpen(checking: boolean, run: () => Promise<void>): boolean {
+	private whenOpen(checking: boolean, run: () => void): boolean {
 		if (this.views().length === 0) return false;
-		if (!checking) void run();
+		if (!checking) run();
 		return true;
 	}
 
-	private async apply(action: ContinuumAction): Promise<ContinuumChange> {
+	private dispatchAndSync(action: ContinuumAction): ContinuumChange {
 		const change = this.continuum.dispatch(action);
-		await this.saveSnapshot();
+		this.saveSnapshot();
 		for (const view of this.views()) view.syncState();
 		return change;
 	}
@@ -238,11 +239,12 @@ export class ContinuumController {
 		await Promise.all(this.views().map((view) => view.render()));
 	}
 
-	private async saveSnapshot(): Promise<void> {
-		await this.plugin.saveData({
+	/** Batched: navigation and folding can fire once per key repeat. */
+	private readonly saveSnapshot = debounce(() => {
+		void this.plugin.saveData({
 			...this.continuum.snapshot(),
 			area: this.area,
 			settings: this.settings,
 		} satisfies ContinuumData);
-	}
+	}, 300, false);
 }

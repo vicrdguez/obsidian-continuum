@@ -30,16 +30,18 @@ export const DEFAULT_BINDINGS: KeyBindings = {
 };
 
 /** Reserved for native keyboard traversal, so it can never be bound. */
-const RESERVED = 'Tab';
+export const RESERVED_KEY = 'Tab';
+export const RESERVED_MESSAGE = `${RESERVED_KEY} is reserved for keyboard navigation.`;
 
 export function describeKey(event: KeyDescriptor): string {
-	const key = event.key === ' ' ? 'Space' : event.key.toLowerCase();
 	return [
 		...(event.ctrlKey ? ['Ctrl'] : []),
 		...(event.metaKey ? ['Meta'] : []),
 		...(event.altKey ? ['Alt'] : []),
 		...(event.shiftKey ? ['Shift'] : []),
-		event.key.length === 1 ? key : event.key,
+		event.key === ' '
+			? 'Space'
+			: event.key.length === 1 ? event.key.toLowerCase() : event.key,
 	].join('+');
 }
 
@@ -48,8 +50,8 @@ export function validateBindings(bindings: KeyBindings): ValidationResult {
 	for (const action of PANE_ACTIONS) {
 		const binding = bindings[action];
 		if (binding === null) continue;
-		if (binding === RESERVED || binding.endsWith(`+${RESERVED}`)) {
-			return { valid: false, message: `${RESERVED} is reserved for keyboard navigation.` };
+		if (binding === RESERVED_KEY || binding.endsWith(`+${RESERVED_KEY}`)) {
+			return { valid: false, message: RESERVED_MESSAGE };
 		}
 		if (seen.has(binding)) {
 			return { valid: false, message: `${binding} is already used by another action.` };
@@ -63,7 +65,8 @@ export function resolveKey(
 	event: KeyDescriptor,
 	bindings: KeyBindings,
 ): PaneAction | null {
-	if (event.key === RESERVED) return null;
+	// Keyboard traversal outranks any keymap that ever slipped past validation.
+	if (event.key === RESERVED_KEY) return null;
 	const pressed = describeKey(event);
 	return PANE_ACTIONS.find((action) => bindings[action] === pressed) ?? null;
 }

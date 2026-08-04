@@ -22,11 +22,12 @@ Vault: five entries in order `Alpha` (26% of the pane height), `Medium` (61%), `
 - [x] **B2 — Navigate one entry at a time:** `j` and `k` moved focus to the adjacent entry in both directions, and the `Focus next entry` / `Focus previous entry` commands produced the same moves. No command ships a default global hotkey.
 - [x] **B3 — Stop at boundaries:** `k` on the first entry and `j` on the last left focus unchanged; navigation never wrapped.
 - [x] **B4 — Manual scrolling and clicks:** Scrolling the pane left the focused entry unchanged; a real click on another entry focused the clicked entry and repainted the model.
-- [x] **B5 — Adaptive alignment:** At the 80% default, the 247% entry aligned to the pane top (offset 0) while the 61% and 12% entries centred (centre offset 0). Entries clamped at the scroll extremes stay where the browser can put them.
-- [x] **B6 — Configure the threshold:** The slider read 50–100 in steps of 5 at 80. At 50, the 61% entry switched from centred to top-aligned, and the value survived a restart.
+- [x] **B5 — Adaptive alignment:** At the 80% default, the 247% entry aligned to the pane top (offset 0) while the 61% and 12% entries centered (center offset 0). Entries clamped at the scroll extremes stay where the browser can put them. `elementFromPoint` at a top-aligned entry's first pixels returned that entry, so the toolbar does not cover it.
+- [x] **B6 — Configure the threshold:** The slider read 50–100 in steps of 5 at 80. At 50, the 61% entry switched from centered to top-aligned, and the value survived a restart.
 - [x] **B7 — Fold one entry:** `Space` folded only the focused entry, its body left the accessibility tree, the fold survived a restart, and `Tab` still traversed to the entry's source button.
 - [x] **B8 — Fold every entry:** The toolbar action and the `Fold or unfold all entries` command each folded a mixed collection and unfolded an entirely folded one, and the toolbar label alternated between **Fold all entries** and **Unfold all entries**.
 - [x] **B9 — Replace or disable a binding:** Capturing `Shift+n` for next made `Shift+n` navigate and left `j` inert; clearing the fold field with `Backspace` disabled `Space`.
 - [x] **B10 — Reject an unsafe keymap:** Assigning the in-use `Shift+n` to another action was refused with "Shift+n is already used by another action."; `Tab` was refused with "Tab is reserved for keyboard navigation." and still moved focus out of the field. The active keymap was unchanged in both cases.
 - [x] **B11 — Restore defaults:** The button reset the four fields and the saved settings to `j`, `k`, `Enter`, and `Space`.
 - [x] **B12 — Toolbar:** The toolbar reported "5 entries" and exposed one labelled fold-all action.
+- [x] **Re-render:** Editing a collected source note on disk re-rendered the pane, kept keyboard focus on the focused entry, and left the pane keys live. The debounced snapshot write still reached `data.json`.

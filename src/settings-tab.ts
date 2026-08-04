@@ -4,6 +4,8 @@ import {
 	DEFAULT_BINDINGS,
 	describeKey,
 	PANE_ACTIONS,
+	RESERVED_KEY,
+	RESERVED_MESSAGE,
 	validateBindings,
 	type PaneAction,
 } from './pane-keymap';
@@ -38,14 +40,14 @@ export class ContinuumSettingTab extends PluginSettingTab {
 					.setValue(this.controller.settings.alignmentThreshold)
 					.setDynamicTooltip()
 					.onChange((alignmentThreshold) => {
-						void this.controller.saveSettings({ alignmentThreshold });
+						this.controller.saveSettings({ alignmentThreshold });
 					}),
 			);
 
 		new Setting(containerEl)
 			.setName('Pane keys')
 			.setDesc(
-				'Active only while Continuum has focus. Select a field and press a key to bind it, or press Backspace to disable it.',
+				'Active only while Continuum has focus. Select a field and press a key to bind it, or press Backspace to clear it.',
 			)
 			.setHeading();
 
@@ -62,9 +64,8 @@ export class ContinuumSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).addButton((button) =>
 			button.setButtonText('Restore defaults').onClick(() => {
-				void this.controller
-					.saveSettings({ bindings: DEFAULT_BINDINGS })
-					.then(() => { this.display(); });
+				this.controller.saveSettings({ bindings: DEFAULT_BINDINGS });
+				this.display();
 			}),
 		);
 	}
@@ -72,14 +73,15 @@ export class ContinuumSettingTab extends PluginSettingTab {
 	private capture(event: KeyboardEvent, action: PaneAction, text: TextComponent): void {
 		if (MODIFIER_KEYS.has(event.key)) return;
 		// Tab is never captured, so it keeps moving focus out of the field.
-		if (event.key === 'Tab') {
-			new Notice('Tab is reserved for keyboard navigation.');
+		if (event.key === RESERVED_KEY) {
+			new Notice(RESERVED_MESSAGE);
 			return;
 		}
 		event.preventDefault();
 
 		const current = this.controller.settings.bindings;
-		const binding = event.key === 'Backspace' ? null : describeKey(event);
+		const cleared = event.key === 'Backspace' || event.key === 'Delete';
+		const binding = cleared ? null : describeKey(event);
 		const bindings = { ...current, [action]: binding };
 		const result = validateBindings(bindings);
 		if (!result.valid) {
@@ -89,6 +91,6 @@ export class ContinuumSettingTab extends PluginSettingTab {
 		}
 
 		text.setValue(binding ?? '');
-		void this.controller.saveSettings({ bindings });
+		this.controller.saveSettings({ bindings });
 	}
 }

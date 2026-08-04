@@ -1,7 +1,9 @@
 import {
 	DEFAULT_BINDINGS,
+	PANE_ACTIONS,
 	validateBindings,
 	type KeyBindings,
+	type PaneAction,
 } from './pane-keymap';
 
 export interface ContinuumSettings {
@@ -28,7 +30,11 @@ export function normalizeThreshold(value: unknown): number {
 
 /** Saved settings are user-editable JSON, so anything unusable falls back. */
 export function normalizeSettings(saved?: Partial<ContinuumSettings>): ContinuumSettings {
-	const bindings = { ...DEFAULT_BINDINGS, ...saved?.bindings };
+	const bindings: Record<PaneAction, string | null> = { ...DEFAULT_BINDINGS };
+	for (const action of PANE_ACTIONS) {
+		const binding: unknown = saved?.bindings?.[action];
+		if (typeof binding === 'string' || binding === null) bindings[action] = binding;
+	}
 	return {
 		alignmentThreshold: normalizeThreshold(saved?.alignmentThreshold),
 		bindings: validateBindings(bindings).valid ? bindings : DEFAULT_BINDINGS,

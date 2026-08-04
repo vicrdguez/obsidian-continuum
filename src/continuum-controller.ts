@@ -1,20 +1,30 @@
-import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { debounce, MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
 	createContinuum,
 	type Continuum,
+	type ContinuumAction,
+	type ContinuumChange,
 	type PersistedContinuum,
 } from './continuum';
 import { captureNote } from './entry-content';
 import { CONTINUUM_VIEW_TYPE, ContinuumView } from './continuum-view';
+import type { PaneAction } from './pane-keymap';
+import {
+	normalizeSettings,
+	type ContinuumSettings,
+} from './settings';
+import { ContinuumSettingTab } from './settings-tab';
 
 type WorkspaceArea = 'left' | 'right' | 'main';
 
 interface ContinuumData extends PersistedContinuum {
 	readonly area?: WorkspaceArea;
+	readonly settings?: Partial<ContinuumSettings>;
 }
 
 export class ContinuumController {
 	readonly continuum: Continuum;
+	settings: ContinuumSettings;
 	private area: WorkspaceArea;
 	private recentMarkdownLeaf: WorkspaceLeaf | null = null;
 
@@ -23,6 +33,7 @@ export class ContinuumController {
 		saved?: ContinuumData,
 	) {
 		this.continuum = createContinuum(saved);
+		this.settings = normalizeSettings(saved?.settings);
 		this.area = saved?.area ?? 'right';
 	}
 
@@ -42,6 +53,22 @@ export class ContinuumController {
 			callback: () => void this.openContinuum(true),
 		});
 		this.plugin.addCommand({
+			id: 'next-entry',
+			name: 'Focus next entry',
+			checkCallback: (checking) => this.whenOpen(checking, () => this.navigate('focus-next')),
+		});
+		this.plugin.addCommand({
+			id: 'previous-entry',
+			name: 'Focus previous entry',
+			checkCallback: (checking) =>
+				this.whenOpen(checking, () => this.navigate('focus-previous')),
+		});
+		this.plugin.addCommand({
+			id: 'toggle-all-folds',
+			name: 'Fold or unfold all entries',
+			checkCallback: (checking) => this.whenOpen(checking, () => this.toggleAllFolds()),
+		});
+		this.plugin.addCommand({
 			id: 'add-current-note',
 			name: 'Add current note',
 			checkCallback: (checking) => {
@@ -51,6 +78,8 @@ export class ContinuumController {
 				return true;
 			},
 		});
+		this.plugin.addSettingTab(new ContinuumSettingTab(this.plugin, this));
+		this.plugin.register(() => this.saveSnapshot.run());
 
 		this.plugin.registerEvent(
 			this.plugin.app.workspace.on('active-leaf-change', (leaf) => {
@@ -58,7 +87,7 @@ export class ContinuumController {
 			}),
 		);
 		this.plugin.registerEvent(
-			this.plugin.app.workspace.on('layout-change', () => void this.capturePlacement()),
+			this.plugin.app.workspace.on('layout-change', () => { this.capturePlacement(); }),
 		);
 		this.plugin.registerEvent(
 			this.plugin.app.vault.on('modify', (file) => {
@@ -77,9 +106,36 @@ export class ContinuumController {
 		});
 	}
 
-	async focusEntry(id: string): Promise<void> {
-		this.continuum.dispatch({ type: 'focus-entry', id });
-		await this.saveSnapshot();
+	focusEntry(id: string): void {
+		this.dispatchAndSync({ type: 'focus-entry', id });
+	}
+
+	toggleFold(id: string): void {
+		this.dispatchAndSync({ type: 'toggle-fold', id });
+	}
+
+	toggleAllFolds(): void {
+		this.dispatchAndSync({ type: 'toggle-all-folds' });
+	}
+
+	navigate(direction: 'focus-next' | 'focus-previous'): void {
+		const { focusedEntry } = this.dispatchAndSync({ type: direction });
+		if (focusedEntry) for (const view of this.views()) view.focusEntry(focusedEntry.id);
+	}
+
+	async runPaneAction(action: PaneAction, entryId: string): Promise<void> {
+		if (action === 'next') return this.navigate('focus-next');
+		if (action === 'previous') return this.navigate('focus-previous');
+		if (action === 'toggle-fold') return this.toggleFold(entryId);
+		const entry = this.continuum
+			.snapshot()
+			.entries.find(({ id }) => id === entryId);
+		if (entry) await this.openSource(entry.sourcePath);
+	}
+
+	saveSettings(patch: Partial<ContinuumSettings>): void {
+		this.settings = { ...this.settings, ...patch };
+		this.saveSnapshot();
 	}
 
 	async openSource(path: string): Promise<void> {
@@ -108,7 +164,7 @@ export class ContinuumController {
 			type: 'add-entry',
 			entry: captureNote({ id: crypto.randomUUID(), path: view.file.path }),
 		});
-		await this.saveSnapshot();
+		this.saveSnapshot();
 		const continuumView = await this.openContinuum(false);
 		await this.renderViews();
 		if (change.focusedEntry) {
@@ -145,7 +201,7 @@ export class ContinuumController {
 		return this.plugin.app.workspace.getLeaf('tab');
 	}
 
-	private async capturePlacement(): Promise<void> {
+	private capturePlacement(): void {
 		const leaf = this.plugin.app.workspace.getLeavesOfType(CONTINUUM_VIEW_TYPE)[0];
 		if (!leaf) return;
 		const root = leaf.getRoot();
@@ -156,19 +212,39 @@ export class ContinuumController {
 				: 'main';
 		if (area !== this.area) {
 			this.area = area;
-			await this.saveSnapshot();
+			this.saveSnapshot();
 		}
 	}
 
-	private async renderViews(): Promise<void> {
-		await Promise.all(
-			this.plugin.app.workspace
-				.getLeavesOfType(CONTINUUM_VIEW_TYPE)
-				.map((leaf) => (leaf.view as ContinuumView).render()),
-		);
+	private whenOpen(checking: boolean, run: () => void): boolean {
+		if (this.views().length === 0) return false;
+		if (!checking) run();
+		return true;
 	}
 
-	private async saveSnapshot(): Promise<void> {
-		await this.plugin.saveData({ ...this.continuum.snapshot(), area: this.area });
+	private dispatchAndSync(action: ContinuumAction): ContinuumChange {
+		const change = this.continuum.dispatch(action);
+		this.saveSnapshot();
+		for (const view of this.views()) view.syncState();
+		return change;
 	}
+
+	private views(): ContinuumView[] {
+		return this.plugin.app.workspace
+			.getLeavesOfType(CONTINUUM_VIEW_TYPE)
+			.map((leaf) => leaf.view as ContinuumView);
+	}
+
+	private async renderViews(): Promise<void> {
+		await Promise.all(this.views().map((view) => view.render()));
+	}
+
+	/** Batched: navigation and folding can fire once per key repeat. */
+	private readonly saveSnapshot = debounce(() => {
+		void this.plugin.saveData({
+			...this.continuum.snapshot(),
+			area: this.area,
+			settings: this.settings,
+		} satisfies ContinuumData);
+	}, 300, false);
 }

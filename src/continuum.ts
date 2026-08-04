@@ -7,11 +7,16 @@ export interface LiveNoteEntry {
 export interface PersistedContinuum {
 	readonly entries: readonly LiveNoteEntry[];
 	readonly focusedId?: string;
+	readonly foldedIds?: readonly string[];
 }
 
 export type ContinuumAction =
 	| { type: 'add-entry'; entry: LiveNoteEntry }
-	| { type: 'focus-entry'; id: string };
+	| { type: 'focus-entry'; id: string }
+	| { type: 'focus-next' }
+	| { type: 'focus-previous' }
+	| { type: 'toggle-fold'; id: string }
+	| { type: 'toggle-all-folds' };
 
 export interface ContinuumChange {
 	readonly focusedEntry: LiveNoteEntry | undefined;
@@ -24,28 +29,60 @@ export interface Continuum {
 
 export function createContinuum(saved?: PersistedContinuum): Continuum {
 	const entries = uniqueEntries(saved?.entries ?? []);
-	let focusedId = entries.some(({ id }) => id === saved?.focusedId)
-		? saved?.focusedId
-		: undefined;
+	const has = (id: string | undefined): boolean =>
+		entries.some((entry) => entry.id === id);
+	// A remembered entry can disappear between sessions; the newest one stands in.
+	let focusedId = has(saved?.focusedId) ? saved?.focusedId : entries.at(-1)?.id;
+	const foldedIds = new Set((saved?.foldedIds ?? []).filter(has));
 
-	const snapshot = (): PersistedContinuum => ({
-		entries: entries.map((entry) => ({ ...entry })),
-		...(focusedId ? { focusedId } : {}),
-	});
+	const step = (offset: number): void => {
+		const index = entries.findIndex(({ id }) => id === focusedId);
+		focusedId = entries[index + offset]?.id ?? focusedId;
+	};
+
+	const snapshot = (): PersistedContinuum => {
+		const folded = entries.filter(({ id }) => foldedIds.has(id)).map(({ id }) => id);
+		return {
+			entries: entries.map((entry) => ({ ...entry })),
+			...(focusedId ? { focusedId } : {}),
+			...(folded.length ? { foldedIds: folded } : {}),
+		};
+	};
 
 	return {
 		dispatch(action) {
-			if (action.type === 'add-entry') {
-				const existing = entries.find(
-					(entry) => entry.sourcePath === action.entry.sourcePath,
-				);
-				if (existing) focusedId = existing.id;
-				else {
-					entries.push({ ...action.entry });
-					focusedId = action.entry.id;
+			switch (action.type) {
+				case 'add-entry': {
+					const existing = entries.find(
+						(entry) => entry.sourcePath === action.entry.sourcePath,
+					);
+					if (existing) focusedId = existing.id;
+					else {
+						entries.push({ ...action.entry });
+						focusedId = action.entry.id;
+					}
+					break;
 				}
-			} else if (entries.some(({ id }) => id === action.id)) {
-				focusedId = action.id;
+				case 'focus-entry':
+					if (has(action.id)) focusedId = action.id;
+					break;
+				case 'focus-next':
+					step(1);
+					break;
+				case 'focus-previous':
+					step(-1);
+					break;
+				case 'toggle-fold':
+					if (has(action.id) && !foldedIds.delete(action.id)) {
+						foldedIds.add(action.id);
+					}
+					break;
+				case 'toggle-all-folds': {
+					const foldEverything = foldedIds.size < entries.length;
+					foldedIds.clear();
+					if (foldEverything) for (const { id } of entries) foldedIds.add(id);
+					break;
+				}
 			}
 
 			return {

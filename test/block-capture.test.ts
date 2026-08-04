@@ -163,7 +163,32 @@ void test('headings and existing block IDs are live without source edits', () =>
 	});
 	assert.equal(block.entry.type, 'live-content');
 	assert.equal(block.entry.sourceAddress, 'Research.md#^stable1');
+	assert.equal(block.entry.sourceContext, 'Research.md ^stable1');
 	assert.equal(block.sourceEdit, undefined);
+});
+
+void test('block-addressed entries carry the block ID as their most specific context', () => {
+	const markdown = '# Findings\nEvidence ^stable1';
+	const paragraph = range(markdown, markdown.indexOf('Evidence'), markdown.length);
+	const plan = capture({
+		markdown,
+		cursor: paragraph.start,
+		selection: null,
+		metadata: {
+			path: 'Research.md',
+			sections: [
+				{ type: 'heading', position: range(markdown, 0, 10) },
+				{ type: 'paragraph', position: paragraph },
+			],
+			headings: [{ heading: 'Findings', level: 1, position: range(markdown, 0, 10) }],
+			blocks: [{ id: 'stable1', position: paragraph }],
+		},
+		automaticBlockIds: false,
+		generateId: () => 'unused',
+		entryId: 'block',
+	});
+
+	assert.equal(plan.entry.sourceContext, 'Findings ^stable1');
 });
 
 void test('an unaddressed cursor Block stays a snapshot by default', () => {
@@ -211,6 +236,7 @@ void test('opted-in cursor and exact Block selections receive collision-checked 
 
 		assert.equal(plan.entry.type, 'live-content');
 		assert.equal(plan.entry.sourceAddress, 'Source.md#^def456');
+		assert.equal(plan.entry.sourceContext, 'Source.md ^def456');
 		assert.deepEqual(plan.sourceEdit, {
 			range: { from: { line: 0, ch: 0 }, to: { line: 0, ch: 9 } },
 			replacement: 'Paragraph ^def456',

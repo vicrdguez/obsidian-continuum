@@ -118,6 +118,7 @@ function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
 		};
 	}
 	if (!subpath) return snapshot(input, block.range.start.offset, block.range.end.offset);
+	const context = sourceContext(input, block.range.start.offset);
 	return {
 		entry: {
 			id: input.entryId,
@@ -125,7 +126,8 @@ function captureBlock(input: CaptureInput, block: DerivedBlock): CapturePlan {
 			sourcePath: input.metadata.path,
 			sourceAddress: `${input.metadata.path}${subpath}`,
 			markdown,
-			sourceContext: sourceContext(input, block.range.start.offset),
+			// A block ID is more specific than the enclosing heading or file it sits in.
+			sourceContext: subpath.startsWith('#^') ? `${context} ${subpath.slice(1)}` : context,
 		},
 		...(sourceEdit ? { sourceEdit } : {}),
 	};

@@ -1,11 +1,11 @@
-import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { type Editor, MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
 	commitEntry,
 	createContinuum,
 	type Continuum,
 	type PersistedContinuum,
 } from './continuum';
-import { capture, captureNote, type SourceRange } from './entry-content';
+import { capture, captureNote, type CapturePlan, type SourceRange } from './entry-content';
 import { canCollectCurrentBlock } from './editor-command';
 import { CONTINUUM_VIEW_TYPE, ContinuumView } from './continuum-view';
 import { ContinuumSettingTab } from './settings';
@@ -177,10 +177,8 @@ export class ContinuumController {
 		const change = await commitEntry(
 			this.continuum,
 			plan.entry,
-			(snapshot) => this.saveSnapshot(snapshot),
-			sourceEdit && (() => {
-				editor.replaceRange(sourceEdit.replacement, sourceEdit.range.from, sourceEdit.range.to);
-			}),
+			() => this.saveSnapshot(),
+			sourceEdit && (() => applySourceEdit(editor, sourceEdit, plan.entry.markdown)),
 		);
 		await this.presentChange(change.focusedEntry?.id, focusedElement);
 	}
@@ -192,7 +190,7 @@ export class ContinuumController {
 		const change = await commitEntry(
 			this.continuum,
 			captureNote({ id: crypto.randomUUID(), path: view.file.path }),
-			(snapshot) => this.saveSnapshot(snapshot),
+			() => this.saveSnapshot(),
 		);
 		await this.presentChange(change.focusedEntry?.id, focusedElement);
 	}
@@ -255,13 +253,31 @@ export class ContinuumController {
 		);
 	}
 
-	private async saveSnapshot(snapshot = this.continuum.snapshot()): Promise<void> {
+	/** Always writes the Continuum as it stands now, so a slow save cannot drop a newer entry. */
+	private async saveSnapshot(): Promise<void> {
 		await this.plugin.saveData({
-			...snapshot,
+			...this.continuum.snapshot(),
 			area: this.area,
 			automaticBlockIds: this.automaticBlockIds,
 		});
 	}
+}
+
+/**
+ * Applies a capture plan's source edit and returns the undo for it. The undo only fires
+ * while the inserted text is still intact, so it never overwrites later typing.
+ */
+function applySourceEdit(
+	editor: Editor,
+	edit: NonNullable<CapturePlan['sourceEdit']>,
+	original: string,
+): () => void {
+	const { from } = edit.range;
+	editor.replaceRange(edit.replacement, from, edit.range.to);
+	const to = editor.offsetToPos(editor.posToOffset(from) + edit.replacement.length);
+	return () => {
+		if (editor.getRange(from, to) === edit.replacement) editor.replaceRange(original, from, to);
+	};
 }
 
 function generateBlockId(): string {

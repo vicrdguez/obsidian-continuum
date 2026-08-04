@@ -36,7 +36,7 @@ export interface PersistedContinuum {
 export type ContinuumAction =
 	| { type: 'add-entry'; entry: Entry }
 	| { type: 'focus-entry'; id: string }
-	| { type: 'restore'; saved: PersistedContinuum };
+	| { type: 'remove-entry'; id: string };
 
 export interface ContinuumChange {
 	readonly focusedEntry: Entry | undefined;
@@ -70,11 +70,9 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 					entries.push({ ...action.entry });
 					focusedId = action.entry.id;
 				}
-			} else if (action.type === 'restore') {
-				entries = uniqueEntries(action.saved.entries);
-				focusedId = entries.some(({ id }) => id === action.saved.focusedId)
-					? action.saved.focusedId
-					: undefined;
+			} else if (action.type === 'remove-entry') {
+				entries = entries.filter(({ id }) => id !== action.id);
+				if (!entries.some(({ id }) => id === focusedId)) focusedId = undefined;
 			} else if (entries.some(({ id }) => id === action.id)) {
 				focusedId = action.id;
 			}
@@ -88,26 +86,28 @@ export function createContinuum(saved?: PersistedContinuum): Continuum {
 }
 
 /**
- * Adds an entry as one unit of work: nothing durable happens unless the entry is
- * persisted first. A `persist` rejection rolls the Continuum back and skips
- * `applySourceEdit`, so a failed save can never leave a block ID in a note that no
- * saved entry refers to.
+ * Adds an entry as one unit of work. `applySourceEdit` runs first and synchronously, so
+ * the captured source range cannot go stale while persistence is in flight, and a source
+ * edit that throws persists nothing. It returns the undo for exactly that edit: a `persist`
+ * rejection runs it and removes only this entry, never a concurrent collection's.
  */
 export async function commitEntry(
 	continuum: Continuum,
 	entry: Entry,
-	persist: (snapshot: PersistedContinuum) => Promise<void>,
-	applySourceEdit?: () => void,
+	persist: () => Promise<void>,
+	applySourceEdit?: () => () => void,
 ): Promise<ContinuumChange> {
-	const previous = continuum.snapshot();
+	const previousFocusedId = continuum.snapshot().focusedId;
+	const undoSourceEdit = applySourceEdit?.();
 	const change = continuum.dispatch({ type: 'add-entry', entry });
 	try {
-		await persist(continuum.snapshot());
+		await persist();
 	} catch (error) {
-		continuum.dispatch({ type: 'restore', saved: previous });
+		undoSourceEdit?.();
+		continuum.dispatch({ type: 'remove-entry', id: entry.id });
+		if (previousFocusedId) continuum.dispatch({ type: 'focus-entry', id: previousFocusedId });
 		throw error;
 	}
-	applySourceEdit?.();
 	return change;
 }
 

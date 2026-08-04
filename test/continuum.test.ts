@@ -68,36 +68,88 @@ void test('deduplicates live source addresses but appends duplicate snapshots', 
 	]);
 });
 
-void test('a failed save edits no source and leaves the Continuum untouched', async () => {
+void test('edits the source before persistence can interrupt it', async () => {
+	const continuum = createContinuum();
+	const order: string[] = [];
+
+	await commitEntry(
+		continuum,
+		alpha,
+		() => { order.push('persist'); return Promise.resolve(); },
+		() => { order.push('edit'); return () => order.push('undo'); },
+	);
+
+	assert.deepEqual(order, ['edit', 'persist']);
+});
+
+void test('a failed save undoes the source edit and leaves the Continuum untouched', async () => {
 	const continuum = createContinuum({ entries: [alpha], focusedId: 'alpha' });
 	const before = continuum.snapshot();
 	let sourceEdits = 0;
+	let undos = 0;
 
 	await assert.rejects(
 		commitEntry(continuum, beta, () => Promise.reject(new Error('disk full')), () => {
 			sourceEdits += 1;
+			return () => { undos += 1; };
 		}),
 		/disk full/,
 	);
 
-	assert.equal(sourceEdits, 0);
+	assert.equal(sourceEdits, 1);
+	assert.equal(undos, 1);
 	assert.deepEqual(continuum.snapshot(), before);
+});
+
+void test('a failed source edit persists nothing', async () => {
+	const continuum = createContinuum({ entries: [alpha], focusedId: 'alpha' });
+	const before = continuum.snapshot();
+	let saves = 0;
+
+	await assert.rejects(
+		commitEntry(
+			continuum,
+			beta,
+			() => { saves += 1; return Promise.resolve(); },
+			() => { throw new Error('stale editor'); },
+		),
+		/stale editor/,
+	);
+
+	assert.equal(saves, 0);
+	assert.deepEqual(continuum.snapshot(), before);
+});
+
+void test('a failed collection keeps a concurrent successful collection', async () => {
+	const continuum = createContinuum();
+	let failPending = () => {};
+	const pending = commitEntry(continuum, alpha, () => new Promise((_resolve, reject) => {
+		failPending = () => { reject(new Error('disk full')); };
+	}));
+
+	await commitEntry(continuum, beta, () => Promise.resolve());
+	failPending();
+
+	await assert.rejects(pending, /disk full/);
+	assert.deepEqual(continuum.snapshot(), { entries: [beta], focusedId: 'beta' });
 });
 
 void test('a successful save edits the source and keeps the added entry', async () => {
 	const continuum = createContinuum({ entries: [alpha], focusedId: 'alpha' });
 	const saved: unknown[] = [];
 	let sourceEdits = 0;
+	let undos = 0;
 
 	const change = await commitEntry(
 		continuum,
 		beta,
-		(snapshot) => { saved.push(snapshot); return Promise.resolve(); },
-		() => { sourceEdits += 1; },
+		() => { saved.push(continuum.snapshot()); return Promise.resolve(); },
+		() => { sourceEdits += 1; return () => { undos += 1; }; },
 	);
 
 	assert.equal(change.focusedEntry?.id, 'beta');
 	assert.equal(sourceEdits, 1);
+	assert.equal(undos, 0);
 	assert.deepEqual(saved, [{ entries: [alpha, beta], focusedId: 'beta' }]);
 	assert.deepEqual(continuum.snapshot(), { entries: [alpha, beta], focusedId: 'beta' });
 });

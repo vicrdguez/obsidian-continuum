@@ -264,8 +264,9 @@ export class ContinuumController {
 }
 
 /**
- * Applies a capture plan's source edit and returns the undo for it. The undo only fires
- * while the inserted text is still intact, so it never overwrites later typing.
+ * Applies a capture plan's source edit and returns the undo for it. The undo compares the
+ * captured range against what it wrote and skips when they differ, so writing over later
+ * typing is traded for the rarer, harmless residue of an unreferenced block ID.
  */
 function applySourceEdit(
 	editor: Editor,

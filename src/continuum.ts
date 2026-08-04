@@ -105,7 +105,10 @@ export async function commitEntry(
 	} catch (error) {
 		undoSourceEdit?.();
 		continuum.dispatch({ type: 'remove-entry', id: entry.id });
-		if (previousFocusedId) continuum.dispatch({ type: 'focus-entry', id: previousFocusedId });
+		// Only this entry's own removal may hand focus back; a newer collection keeps it.
+		if (previousFocusedId && !continuum.snapshot().focusedId) {
+			continuum.dispatch({ type: 'focus-entry', id: previousFocusedId });
+		}
 		throw error;
 	}
 	return change;

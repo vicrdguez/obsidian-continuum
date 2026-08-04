@@ -121,7 +121,8 @@ void test('a failed source edit persists nothing', async () => {
 });
 
 void test('a failed collection keeps a concurrent successful collection', async () => {
-	const continuum = createContinuum();
+	const gamma: LiveNoteEntry = { id: 'gamma', type: 'live-note', sourcePath: 'Notes/Gamma.md' };
+	const continuum = createContinuum({ entries: [gamma], focusedId: 'gamma' });
 	let failPending = () => {};
 	const pending = commitEntry(continuum, alpha, () => new Promise((_resolve, reject) => {
 		failPending = () => { reject(new Error('disk full')); };
@@ -131,7 +132,7 @@ void test('a failed collection keeps a concurrent successful collection', async 
 	failPending();
 
 	await assert.rejects(pending, /disk full/);
-	assert.deepEqual(continuum.snapshot(), { entries: [beta], focusedId: 'beta' });
+	assert.deepEqual(continuum.snapshot(), { entries: [gamma, beta], focusedId: 'beta' });
 });
 
 void test('a successful save edits the source and keeps the added entry', async () => {

@@ -2,19 +2,29 @@ import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import {
 	createContinuum,
 	type Continuum,
+	type ContinuumAction,
+	type ContinuumChange,
 	type PersistedContinuum,
 } from './continuum';
 import { captureNote } from './entry-content';
 import { CONTINUUM_VIEW_TYPE, ContinuumView } from './continuum-view';
+import type { PaneAction } from './pane-keymap';
+import {
+	normalizeSettings,
+	type ContinuumSettings,
+} from './settings';
+import { ContinuumSettingTab } from './settings-tab';
 
 type WorkspaceArea = 'left' | 'right' | 'main';
 
 interface ContinuumData extends PersistedContinuum {
 	readonly area?: WorkspaceArea;
+	readonly settings?: Partial<ContinuumSettings>;
 }
 
 export class ContinuumController {
 	readonly continuum: Continuum;
+	settings: ContinuumSettings;
 	private area: WorkspaceArea;
 	private recentMarkdownLeaf: WorkspaceLeaf | null = null;
 
@@ -23,6 +33,7 @@ export class ContinuumController {
 		saved?: ContinuumData,
 	) {
 		this.continuum = createContinuum(saved);
+		this.settings = normalizeSettings(saved?.settings);
 		this.area = saved?.area ?? 'right';
 	}
 
@@ -42,6 +53,22 @@ export class ContinuumController {
 			callback: () => void this.openContinuum(true),
 		});
 		this.plugin.addCommand({
+			id: 'next-entry',
+			name: 'Focus next entry',
+			checkCallback: (checking) => this.whenOpen(checking, () => this.navigate('focus-next')),
+		});
+		this.plugin.addCommand({
+			id: 'previous-entry',
+			name: 'Focus previous entry',
+			checkCallback: (checking) =>
+				this.whenOpen(checking, () => this.navigate('focus-previous')),
+		});
+		this.plugin.addCommand({
+			id: 'toggle-all-folds',
+			name: 'Fold or unfold all entries',
+			checkCallback: (checking) => this.whenOpen(checking, () => this.toggleAllFolds()),
+		});
+		this.plugin.addCommand({
 			id: 'add-current-note',
 			name: 'Add current note',
 			checkCallback: (checking) => {
@@ -51,6 +78,7 @@ export class ContinuumController {
 				return true;
 			},
 		});
+		this.plugin.addSettingTab(new ContinuumSettingTab(this.plugin, this));
 
 		this.plugin.registerEvent(
 			this.plugin.app.workspace.on('active-leaf-change', (leaf) => {
@@ -78,7 +106,34 @@ export class ContinuumController {
 	}
 
 	async focusEntry(id: string): Promise<void> {
-		this.continuum.dispatch({ type: 'focus-entry', id });
+		await this.apply({ type: 'focus-entry', id });
+	}
+
+	async toggleFold(id: string): Promise<void> {
+		await this.apply({ type: 'toggle-fold', id });
+	}
+
+	async toggleAllFolds(): Promise<void> {
+		await this.apply({ type: 'toggle-all-folds' });
+	}
+
+	async navigate(direction: 'focus-next' | 'focus-previous'): Promise<void> {
+		const { focusedEntry } = await this.apply({ type: direction });
+		if (focusedEntry) for (const view of this.views()) view.focusEntry(focusedEntry.id);
+	}
+
+	async runPaneAction(action: PaneAction, entryId: string): Promise<void> {
+		if (action === 'next') return this.navigate('focus-next');
+		if (action === 'previous') return this.navigate('focus-previous');
+		if (action === 'toggle-fold') return this.toggleFold(entryId);
+		const entry = this.continuum
+			.snapshot()
+			.entries.find(({ id }) => id === entryId);
+		if (entry) await this.openSource(entry.sourcePath);
+	}
+
+	async saveSettings(patch: Partial<ContinuumSettings>): Promise<void> {
+		this.settings = { ...this.settings, ...patch };
 		await this.saveSnapshot();
 	}
 
@@ -160,15 +215,34 @@ export class ContinuumController {
 		}
 	}
 
+	private whenOpen(checking: boolean, run: () => Promise<void>): boolean {
+		if (this.views().length === 0) return false;
+		if (!checking) void run();
+		return true;
+	}
+
+	private async apply(action: ContinuumAction): Promise<ContinuumChange> {
+		const change = this.continuum.dispatch(action);
+		await this.saveSnapshot();
+		for (const view of this.views()) view.syncState();
+		return change;
+	}
+
+	private views(): ContinuumView[] {
+		return this.plugin.app.workspace
+			.getLeavesOfType(CONTINUUM_VIEW_TYPE)
+			.map((leaf) => leaf.view as ContinuumView);
+	}
+
 	private async renderViews(): Promise<void> {
-		await Promise.all(
-			this.plugin.app.workspace
-				.getLeavesOfType(CONTINUUM_VIEW_TYPE)
-				.map((leaf) => (leaf.view as ContinuumView).render()),
-		);
+		await Promise.all(this.views().map((view) => view.render()));
 	}
 
 	private async saveSnapshot(): Promise<void> {
-		await this.plugin.saveData({ ...this.continuum.snapshot(), area: this.area });
+		await this.plugin.saveData({
+			...this.continuum.snapshot(),
+			area: this.area,
+			settings: this.settings,
+		} satisfies ContinuumData);
 	}
 }

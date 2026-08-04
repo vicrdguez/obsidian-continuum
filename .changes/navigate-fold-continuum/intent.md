@@ -37,10 +37,10 @@ Add persistent entry focus, pane-local navigation and folding, adaptive scrollin
 - Automatic focus changes during manual scrolling
 
 ## Definition of Done
-- [ ] Focusing Continuum restores the last valid entry or falls back predictably.
-- [ ] Pane-local and command navigation moves one entry at a time without wrapping or reacting to manual scroll.
-- [ ] Focused entries use the configurable adaptive center/top alignment rule.
-- [ ] Individual fold state is keyboard-accessible, starts expanded, and persists.
-- [ ] One fold-all action deterministically folds a mixed collection and unfolds an entirely folded collection.
-- [ ] Pane-local bindings can be captured, disabled, reset, and validated without overriding `Tab` or accepting duplicates.
-- [ ] The pane toolbar reports entry count and exposes fold-all without clutter.
+- [x] Focusing Continuum restores the last valid entry or falls back predictably.
+- [x] Pane-local and command navigation moves one entry at a time without wrapping or reacting to manual scroll.
+- [x] Focused entries use the configurable adaptive center/top alignment rule.
+- [x] Individual fold state is keyboard-accessible, starts expanded, and persists.
+- [x] One fold-all action deterministically folds a mixed collection and unfolds an entirely folded collection.
+- [x] Pane-local bindings can be captured, disabled, reset, and validated without overriding `Tab` or accepting duplicates.
+- [x] The pane toolbar reports entry count and exposes fold-all without clutter.
